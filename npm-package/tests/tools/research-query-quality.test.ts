@@ -384,8 +384,9 @@ describe("extractComparands — comparand grouping", () => {
 // ─── #3 (2026-11-19): sentence-initial pronouns/determiners must never be read
 // as a comparand. "We"/"Wir" are capitalized at the start of a sentence —
 // isComparandToken's `/^[A-Z]/` capitalization check alone would misread them
-// as a brand-like token. Fixed via a table row (COMPARAND_EXCLUDE_WORDS_BY_LANG),
-// not a new branch. ────────────────────────────────────────────────────────
+// as a brand-like token. Fixed via a table row (COMPARAND_PRONOUN_WORDS_BY_LANG)
+// plus ONE discriminator rule (isPronounActuallyComparand) — not a branch per
+// word, and not a blanket identity exclusion either (Round 2 below). ───────
 describe("extractComparands — sentence-initial pronouns excluded, not misread as a comparand (#3)", () => {
   it("English 'We compared X vs Y' does not extract 'We' as a 3rd comparand", () => {
     expect(extractComparands("We compared O2 vs Telekom for business customers")).toEqual(["O2", "Telekom"]);
@@ -415,6 +416,65 @@ describe("extractComparands — sentence-initial pronouns excluded, not misread 
   });
 
   it("mirror: 0.9.49 fixture 'AWS vs Azure vs GCP vs Oracle Cloud' is unaffected by the pronoun exclusion", () => {
+    expect(extractComparands("AWS vs Azure vs GCP vs Oracle Cloud pricing")).toEqual([
+      "AWS", "Azure", "GCP", "Oracle",
+    ]);
+  });
+});
+
+// ─── #3 Round 2 (2026-11-19, coordinator review HIGH): the blanket, position-
+// independent pronoun exclusion above dropped the first word of a REAL brand
+// that collides with a pronoun — live-reproduced by the reviewer: "compare Us
+// Weekly vs People magazine" → ["Weekly","People"] (lost "Us"), "vergleiche
+// WIR Bank und UBS" → ["Bank","UBS"] (lost "WIR"), "compare She Media vs Vox
+// Media" → ["Media","Vox Media"] (lost "She"). Fixed with ONE discriminator
+// rule (isPronounActuallyComparand), not a branch per brand: a pronoun/
+// determiner is dropped only when it stands alone or is followed by a
+// lowercase word (reads as the actual pronoun — "We compared...", "Wir
+// vergleichen..."); it is KEPT when it is ALL CAPS at length ≥2 (reads as an
+// acronym/brand regardless of what follows — "WIR" the bank, "IT" the dept)
+// OR the next token is itself a comparand candidate (joins into a 2-word
+// phrase the same way "Deutsche Telekom" already does — "Us"+"Weekly",
+// "She"+"Media"). ────────────────────────────────────────────────────────
+describe("extractComparands — pronoun/brand collision: KEEP the real brand, still DROP the real pronoun (#3 Round 2)", () => {
+  it("'Us Weekly' (a real magazine) is kept whole — 'Us' is followed by a capitalized word, not a lowercase verb", () => {
+    expect(extractComparands("compare Us Weekly vs People magazine")).toEqual(["Us Weekly", "People"]);
+  });
+
+  it("'WIR Bank' (a real Swiss bank, written ALL CAPS) is kept whole", () => {
+    expect(extractComparands("vergleiche WIR Bank und UBS")).toEqual(["WIR Bank", "UBS"]);
+  });
+
+  it("'She Media' (a real media company) is kept whole — same reasoning as 'Us Weekly'", () => {
+    expect(extractComparands("compare She Media vs Vox Media")).toEqual(["She Media", "Vox Media"]);
+  });
+
+  it("an ALL-CAPS pronoun-shaped word standing alone ('IT' the department, not the pronoun 'it') is kept as a brand", () => {
+    expect(extractComparands("compare IT vs HR software")).toEqual(["IT", "HR"]);
+  });
+
+  // Mirror — the original Round 1 fixtures (pronoun followed by a LOWERCASE
+  // verb/connector, the shape the fix actually targets) must still drop it.
+  it("mirror: 'We compared Novada versus Bright Data' still drops 'We' (followed by a lowercase verb)", () => {
+    expect(extractComparands("We compared Novada versus Bright Data pricing")).toEqual(["Novada", "Bright Data"]);
+  });
+
+  it("mirror: 'Wir vergleichen O2 und Telekom' still drops 'Wir' (followed by a lowercase verb)", () => {
+    expect(extractComparands("Wir vergleichen O2 und Telekom")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("mirror: 'Nous comparons Orange et SFR' still drops 'Nous' (followed by a lowercase verb)", () => {
+    expect(extractComparands("Nous comparons Orange et SFR")).toEqual(["Orange", "SFR"]);
+  });
+
+  // Mirror — the 0.9.49 fixtures (no pronoun involved at all) stay unchanged.
+  it("mirror: 0.9.49 fixture 'O2, Telekom und Deutsche Telekom...' still unaffected", () => {
+    expect(extractComparands("O2, Telekom und Deutsche Telekom Geschäftskunden Internet Vergleich")).toEqual([
+      "O2", "Telekom", "Deutsche Telekom",
+    ]);
+  });
+
+  it("mirror: 0.9.49 fixture 'AWS vs Azure vs GCP vs Oracle Cloud' still unaffected", () => {
     expect(extractComparands("AWS vs Azure vs GCP vs Oracle Cloud pricing")).toEqual([
       "AWS", "Azure", "GCP", "Oracle",
     ]);

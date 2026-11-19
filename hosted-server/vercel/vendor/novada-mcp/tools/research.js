@@ -100,7 +100,7 @@ const SUPPORTED_LANGS = ["en", "de", "fr", "es"];
 const COMPARISON_TRIGGER_WORDS = {
     en: ["vs\\.?", "versus", "compared?\\s+to", "compare", "alternative", "better than", "difference between", "pros and cons"],
     de: ["vs\\.?", "versus", "gegen", "vergleich(?:e[nst]?)?", "gegenüber", "unterschied(?:e)?\\s+zwischen", "zwischen"],
-    fr: ["vs\\.?", "versus", "contre", "comparaisons?", "comparer", "diff[ée]rences?\\s+entre", "entre"],
+    fr: ["vs\\.?", "versus", "contre", "comparaisons?", "compar(?:er|ons|ez|ent|e|es)", "diff[ée]rences?\\s+entre", "entre"],
     es: ["vs\\.?", "versus", "contra", "comparaci[oó]n", "comparar", "diferencias?\\s+entre", "entre"],
 };
 const COMPARISON_TRIGGER_REGEX = new RegExp(`\\b(${SUPPORTED_LANGS.flatMap(l => COMPARISON_TRIGGER_WORDS[l]).join("|")})\\b`, "i");
@@ -223,24 +223,69 @@ function detectLanguage(question) {
 // comparison questions get one targeted query PER comparand instead of the
 // full question padded with a generic suffix (2026-11-14 field report).
 /** Non-comparand syntax words, per language — question starters, comparison
- *  verbs/prepositions, AND personal pronouns/possessive determiners (#3,
- *  2026-11-19: "We"/"Wir" and similar sentence-initial capitalized pronouns
- *  passed isComparandToken's `/^[A-Z]/` capitalization check and were
- *  misread as a comparand — e.g. a question starting "We compared O2 vs
- *  Telekom..." extracted "We" as a 3rd comparand). Checked against the
- *  lowercased, bare token. Kept separate from the DOMAIN/STOP tables because
- *  this is about SYNTAX (what glues a comparand list together or can never
- *  itself BE one), not general vocabulary. Union across all supported
- *  languages: knowing a word is syntax in ANY supported language is enough
- *  to exclude it everywhere (harmless cross-lingual overlap, and a 5th
- *  language or a newly-noticed pronoun is a new array entry, not a branch). */
+ *  verbs/prepositions. Checked against the lowercased, bare token. Kept
+ *  separate from the DOMAIN/STOP tables because this is about SYNTAX (what
+ *  glues a comparand list together), not general vocabulary. Union across
+ *  all supported languages: knowing a word is comparison-syntax in ANY
+ *  supported language is enough to exclude it everywhere (harmless
+ *  cross-lingual overlap, and a 5th language is a new array entry).
+ *  These words (articles/prepositions/verbs) can never themselves open a
+ *  real brand name, so this table's exclusion is unconditional — unlike
+ *  COMPARAND_PRONOUN_WORDS_BY_LANG below, which needs a position-sensitive
+ *  rule because pronouns sometimes ARE the first word of a real brand. */
 const COMPARAND_EXCLUDE_WORDS_BY_LANG = {
-    en: ["what", "how", "why", "when", "where", "who", "which", "is", "are", "the", "a", "an", "for", "compare", "comparing", "compared", "between", "and", "or", "with", "from", "in", "on", "at", "to", "vs", "versus", "offers", "differences", "difference", "pros", "cons", "we", "us", "our", "ours", "i", "you", "your", "yours", "they", "them", "their", "theirs", "he", "she", "him", "her", "hers", "it", "its", "this", "that", "these", "those"],
-    de: ["vergleich", "vergleichen", "vergleicht", "vergleiche", "zwischen", "und", "oder", "gegenüber", "gegen", "unterschied", "unterschiede", "im", "der", "die", "das", "wir", "uns", "unser", "unsere", "ich", "mich", "mir", "du", "dich", "dir", "sie", "ihr", "ihre", "ihnen", "er", "es", "diese", "dieser", "dieses"],
-    fr: ["comparaison", "comparaisons", "comparer", "entre", "et", "ou", "contre", "différence", "différences", "nous", "notre", "nos", "je", "tu", "vous", "votre", "vos", "ils", "elles", "il", "elle", "leur", "leurs"],
-    es: ["comparación", "comparar", "entre", "y", "o", "u", "e", "contra", "diferencia", "diferencias", "nosotros", "nosotras", "nuestro", "nuestra", "yo", "tú", "usted", "ustedes", "ellos", "ellas", "él", "su", "sus"],
+    en: ["what", "how", "why", "when", "where", "who", "which", "is", "are", "the", "a", "an", "for", "compare", "comparing", "compared", "between", "and", "or", "with", "from", "in", "on", "at", "to", "vs", "versus", "offers", "differences", "difference", "pros", "cons"],
+    de: ["vergleich", "vergleichen", "vergleicht", "vergleiche", "zwischen", "und", "oder", "gegenüber", "gegen", "unterschied", "unterschiede", "im", "der", "die", "das"],
+    fr: ["comparaison", "comparaisons", "comparer", "entre", "et", "ou", "contre", "différence", "différences"],
+    es: ["comparación", "comparar", "entre", "y", "o", "u", "e", "contra", "diferencia", "diferencias"],
 };
 const COMPARAND_EXCLUDE_WORDS = new Set(SUPPORTED_LANGS.flatMap(l => COMPARAND_EXCLUDE_WORDS_BY_LANG[l]));
+/** Personal pronouns / possessive determiners, per language (#3, 2026-11-19:
+ *  "We"/"Wir" and similar sentence-initial capitalized pronouns passed
+ *  isComparandToken's `/^[A-Z]/` capitalization check and were misread as a
+ *  comparand — e.g. "We compared O2 vs Telekom..." extracted "We" as a 3rd
+ *  comparand). Kept in a SEPARATE table from COMPARAND_EXCLUDE_WORDS_BY_LANG
+ *  above, on purpose: a pronoun, unlike a preposition/article, sometimes IS
+ *  the real first word of a brand ("Us Weekly", "WIR Bank", "She Media") — a
+ *  blanket identity exclusion dropped those (review round 2, HIGH #3,
+ *  live-reproduced: "compare Us Weekly vs People magazine" →
+ *  ["Weekly","People"], losing "Us"). isPronounActuallyComparand (below)
+ *  is the ONE discriminator rule applied to every word in this table; a 5th
+ *  language or a newly-noticed pronoun is still just a new array entry. */
+const COMPARAND_PRONOUN_WORDS_BY_LANG = {
+    en: ["we", "us", "our", "ours", "i", "you", "your", "yours", "they", "them", "their", "theirs", "he", "she", "him", "her", "hers", "it", "its", "this", "that", "these", "those"],
+    de: ["wir", "uns", "unser", "unsere", "ich", "mich", "mir", "du", "dich", "dir", "sie", "ihr", "ihre", "ihnen", "er", "es", "diese", "dieser", "dieses"],
+    fr: ["nous", "notre", "nos", "je", "tu", "vous", "votre", "vos", "ils", "elles", "il", "elle", "leur", "leurs"],
+    es: ["nosotros", "nosotras", "nuestro", "nuestra", "yo", "tú", "usted", "ustedes", "ellos", "ellas", "él", "su", "sus"],
+};
+const COMPARAND_PRONOUN_WORDS = new Set(SUPPORTED_LANGS.flatMap(l => COMPARAND_PRONOUN_WORDS_BY_LANG[l]));
+/**
+ * The one discriminator rule for every COMPARAND_PRONOUN_WORDS entry: a
+ * pronoun/determiner reads as the REAL pronoun (and should be dropped) only
+ * when it is either standing alone or followed by a lowercase verb/connector
+ * ("We compared...", "Wir vergleichen...", "Nous comparons..."). It reads as
+ * the first word of a real brand (and should be KEPT) when either:
+ *   (a) it is written in ALL CAPS at length ≥2 — ordinary pronoun usage is
+ *       essentially never all-caps, so this reads as an acronym/brand
+ *       ("WIR" the bank, "IT" the department) regardless of what follows, or
+ *   (b) the very next token is itself a comparand candidate by
+ *       isComparandToken's own rule — the SAME capitalization check that
+ *       keeps "Deutsche Telekom" whole also joins this pronoun-shaped token
+ *       to the next one ("Us" + "Weekly", "She" + "Media").
+ * `clean` is the token with its own trailing punctuation already stripped
+ * (same `clean` isComparandToken computes); `nextRaw` is the RAW next token
+ * (punctuation stripped here, once, same as every other token in the scan).
+ */
+function isPronounActuallyComparand(clean, nextRaw) {
+    if (clean.length >= 2 && clean === clean.toUpperCase() && clean !== clean.toLowerCase())
+        return true;
+    if (nextRaw === undefined)
+        return false;
+    const nextClean = nextRaw.replace(/[?!.,:;()]/g, "");
+    if (nextClean.length === 0)
+        return false;
+    return isComparandToken(nextClean);
+}
 /** List-connector words, per language — these close the CURRENT comparand
  *  phrase but the list keeps going (Oxford-comma handling below), AND cover
  *  "vs"-chains ("A vs B vs C vs D") the SAME way, not as a special case
@@ -279,12 +324,18 @@ const MAX_COMPARAND_TOKEN_LENGTH = 60;
  *  noun, works for "O2"/"Telekom"/"Deutsche"), an alnum brand token like
  *  "O2"/"5G" (letter+digit either order), or has an internal lowercase→
  *  uppercase hump like "eBay"/"iPhone" (review round 2, MEDIUM #4:
- *  lowercase-initial brands) — and isn't one of the syntax words above. */
-function isComparandToken(token) {
+ *  lowercase-initial brands) — and isn't one of the syntax words above.
+ *  `nextRaw` (the RAW next token in the scan, undefined at end of input) is
+ *  only consulted when `token` is a pronoun/determiner (COMPARAND_PRONOUN_
+ *  WORDS) — see isPronounActuallyComparand's doc comment for the rule. */
+function isComparandToken(token, nextRaw) {
     const clean = token.replace(/[?!.,:;()]/g, "");
     if (clean.length < 2 || clean.length > MAX_COMPARAND_TOKEN_LENGTH)
         return false;
-    if (COMPARAND_EXCLUDE_WORDS.has(clean.toLowerCase()))
+    const lower = clean.toLowerCase();
+    if (COMPARAND_EXCLUDE_WORDS.has(lower))
+        return false;
+    if (COMPARAND_PRONOUN_WORDS.has(lower) && !isPronounActuallyComparand(clean, nextRaw))
         return false;
     if (/^[A-Z]/.test(clean))
         return true;
@@ -322,9 +373,10 @@ export function extractComparands(question) {
             current = [];
         }
     };
-    for (const raw of rawTokens) {
+    for (let i = 0; i < rawTokens.length; i++) {
         if (listClosed)
             break;
+        const raw = rawTokens[i];
         const clean = raw.replace(/[?!.,:;()]/g, "");
         if (clean.length === 0) {
             flush();
@@ -341,7 +393,11 @@ export function extractComparands(question) {
                 listClosed = true;
             continue;
         }
-        if (isComparandToken(clean) && current.length < MAX_COMPARAND_PHRASE_WORDS) {
+        // #3 Round 2: pass the RAW next token so a pronoun/determiner candidate
+        // (COMPARAND_PRONOUN_WORDS) can apply isPronounActuallyComparand's
+        // look-ahead rule. Irrelevant for every other token (ignored unless the
+        // current token is actually in that table).
+        if (isComparandToken(clean, rawTokens[i + 1]) && current.length < MAX_COMPARAND_PHRASE_WORDS) {
             current.push(clean);
             if (hadComma)
                 flush();
