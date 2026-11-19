@@ -8,6 +8,24 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.50] — 2026-11-19
+
+Reliability release from a 64-site layer study and the team's usage reports (issues #1, #39, #41, #43–#47). On the hosted endpoint the default `novada_extract` success rate went from 66% to 78–80% on the same panel, anti-bot sites from 1/8 to 5–6/8, with zero instant (no-attempt) failures and zero failures reported as success. The code is smaller than before: duplicated runtime checks and fallback policies were merged, not extended.
+
+### Fixed
+- **Hosted endpoint no longer pretends to be Vercel.** The server now declares its runtime once (`local` / `hosted` / `serverless`) and every capability check reads that one value. On the EC2-hosted endpoint this re-enables the browser tier, which was off because the code treated the server as a serverless function. No new environment variable.
+- **`novada_extract` `render="auto"` escalates on blocked fetches** (#41): HTTP 403/429/503/520–530 and 418/419/420/444 (e.g. Hacker News' 419), connection resets and timeouts now move on to render, then browser. 404, 410, 400 and 401 still fail as before; an explicit `render="static"` never escalates.
+- **Browser-pinned sites fall back to render** when the browser tier is unavailable, instead of failing instantly; the failure message lists the tiers tried (#45).
+- **Failures are reported as failures.** Every tool marks its own failure results at the source, and both transports turn that into `isError: true`; results whose text merely mentions "error" stay successful. Batch extract no longer counts failed items as successful, and telemetry records ceiling timeouts as timeouts.
+- **Wrong page no longer reported as success:** a deep URL that the server redirects to the site's homepage or to an archive snapshot fails immediately (no billed escalation) with a pointer to the archived copy; a body that is only a CDN error stub or a cookie wall fails honestly. Same-site redirects (http→https, www, trailing slash, locale) are unaffected.
+- **JS-gated tables** that come back empty from a static fetch escalate to render (#46).
+- **DNS `ENOTFOUND`** tries a second resolver and reports whether the domain does not exist (permanent) or the resolver failed (#47).
+- **`novada_search` falls back to other engines on an upstream failure** (#39) using the same single policy as `novada_research`, and says which engine answered. A successful search with zero results is returned as-is (one billed call, no automatic extra searches).
+- **`novada_research` bounds every generated sub-query** (#1): long questions are condensed to keywords, so sub-queries no longer exceed the engine's length limit.
+- **Rate limits:** gateway 429 results include `retry_after_seconds` in the body, not only the HTTP header (#43).
+- **Platform scrapers:** records that echo the request identifier with every content field empty count as "no results", not success. `novada_scrape_x` operations show their latest live-check result instead of a stale "ok".
+- **Hosted tool list** comes from one hidden-tool list instead of two hand-synced copies (#44).
+
 ## [0.9.49] — 2026-11-16
 
 `novada_research` returns relevant, non-duplicate sources for comparison and non-English questions.

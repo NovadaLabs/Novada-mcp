@@ -119,7 +119,7 @@ test("server.mjs integration (built EC2 entrypoint)", async (t) => {
       child.once("exit", (c, s) => resolve({ code: c, signal: s })),
     );
     assert.equal(code, 1, `expected exit code 1, got code=${code} signal=${signal}; stderr=${stderr}`);
-    assert.match(stderr, /FATAL: isHostedEnvironment\(\) returned false/);
+    assert.match(stderr, /FATAL: RUNTIME\.kind !== "hosted"/);
   });
 
   await t.test("normal startup serves the expected request/response contract, then SIGTERM drains and exits 0", async (t) => {

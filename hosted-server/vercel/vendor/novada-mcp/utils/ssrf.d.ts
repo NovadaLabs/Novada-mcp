@@ -55,6 +55,11 @@ type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | dns.
  *
  * axios always invokes lookup as (hostname, options, cb); the signature matches its
  * `LookupFunction` type so it can be assigned to AxiosRequestConfig.lookup directly.
+ *
+ * On ENOTFOUND from the system resolver only (not other DNS errors — see
+ * `tryFallbackResolver`'s doc comment), a second independent resolver is consulted
+ * before giving up (B7, wave B/C 2026-11-18). This adds ~0ms to the happy path: the
+ * fallback leg is never reached unless the FIRST attempt already failed with ENOTFOUND.
  */
 export declare function safeLookup(hostname: string, options: object, cb: LookupCallback): void;
 export {};

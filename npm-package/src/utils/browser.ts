@@ -1,8 +1,22 @@
 import type { Page } from "playwright-core";
-import { TIMEOUTS, isHostedEnvironment } from "../config.js";
+import { TIMEOUTS } from "../config.js";
 import { redactSecrets } from "../_core/errors.js";
 import { getBrowserWs, resolveBrowserWs } from "./credentials.js";
 import { assertUrlSafe, isUrlSafe } from "./ssrf.js";
+// F1 round 5 (independent A/B verifier): this module used to re-implement its
+// own `isHostedEnvironment()` check inline in BOTH isBrowserConfigured() and
+// fetchViaBrowser(), duplicating (and silently diverging from) runtime.ts's
+// isBrowserAvailableOnRuntime() — the canonical gate. Divergence meant that
+// once mcp.ts's F1 caller-key pre-resolution made isBrowserAvailableOnRuntime()
+// return true, extract.ts took the "browser available" arm and called
+// fetchViaBrowser() directly — which threw its OWN stale "serverless (Vercel)
+// cannot provide" error immediately (no try/catch at that call site), bypassing
+// F1's render fallback entirely. ONE gate now: both functions below delegate to
+// isBrowserAvailableOnRuntime(), which reads RUNTIME.canHoldWebSocket (round 8:
+// true for "local"/"hosted", false only for "serverless" — no opt-in flag). No
+// circular import — runtime.ts only imports from config.js/credentials.js,
+// never from this file.
+import { isBrowserAvailableOnRuntime, isBrowserTransportAvailable } from "./runtime.js";
 
 /**
  * Strip credentials and internal endpoints from Browser API error messages.
@@ -95,11 +109,9 @@ export function listSessions(): string[] {
 
 /** Check if Browser API credentials are available (and the runtime can run CDP at all). */
 export function isBrowserConfigured(): boolean {
-  // Serverless (Vercel/Lambda) cannot hold the CDP WebSocket, so auto-mode must not
-  // even attempt the browser tier there — otherwise the gate's error text leaks into
-  // the render-failed response. Local runs are unaffected.
-  if (isHostedEnvironment()) return false;
-  return !!getBrowserWs();
+  // ONE gate (round 5): delegates entirely to runtime.ts's canonical check
+  // instead of re-implementing it.
+  return isBrowserAvailableOnRuntime();
 }
 
 /**
@@ -136,15 +148,21 @@ export async function fetchViaBrowser(
   // (scraped SERP result, or a forced browser mode). Validate before any page.goto.
   assertUrlSafe(url, "browser navigate");
 
-  // Serverless capability gate. Browser mode is CDP-over-WebSocket; on a hosted
-  // serverless runtime (Vercel/Lambda) connectOverCDP cannot hold the WS and fails
-  // with a raw "AuthorizationError" that looks like a credential problem. Fail fast
-  // with a clear, actionable error instead. auto-mode callers catch this and fall
-  // back to the render (Web Unblocker) tier; forced render="browser" gets the message.
-  if (isHostedEnvironment()) {
+  // Transport capability gate (round 5: delegates to isBrowserTransportAvailable(),
+  // the SAME predicate isBrowserConfigured()/isBrowserAvailableOnRuntime() use —
+  // this used to be an inline isHostedEnvironment() check that silently diverged
+  // from the canonical gate). Browser mode is CDP-over-WebSocket; on a genuine
+  // serverless runtime (RUNTIME.kind === "serverless", round 8), connectOverCDP
+  // cannot hold the WS and fails with a raw "AuthorizationError" that looks like
+  // a credential problem. Fail fast with a clear, actionable error instead.
+  // Deliberately does NOT name a specific platform ("Vercel") — a future
+  // serverless-reporting platform could be anything. auto-mode callers catch
+  // this and fall back to the render (Web Unblocker) tier; forced
+  // render="browser" gets the message.
+  if (!isBrowserTransportAvailable()) {
     throw new Error(
-      "Browser mode is not available on the hosted Novada MCP endpoint — " +
-      "it needs a persistent WebSocket (CDP) transport that serverless (Vercel) cannot provide. " +
+      "Browser mode is not available on this runtime — " +
+      "it needs a persistent WebSocket (CDP) transport that this deployment's current configuration cannot provide. " +
       "agent_instruction: Use the 'render' mode (Web Unblocker) for JS rendering, or run the MCP server " +
       "locally (npx -y novada-mcp@latest) where Browser mode works."
     );

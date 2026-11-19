@@ -15,11 +15,22 @@ vi.mock("../../src/tools/extract.js", () => ({
 
 import { novadaMonitor, validateMonitorParams, resetMonitorStore } from "../../src/tools/monitor.js";
 import { novadaExtract } from "../../src/tools/extract.js";
+import { toolFailure, stripToolFailureMark } from "../../src/_core/errors.js";
 
 const mockedExtract = vi.mocked(novadaExtract);
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // Round 5: vi.clearAllMocks() does NOT clear queued mockResolvedValueOnce
+  // implementations — a test that queues more values than it consumes (or
+  // whose call count assumption drifts) leaks its leftover queued value into
+  // the NEXT test. This was previously invisible (a leaked failure fixture
+  // just silently reprocessed as "another failure"); it became a hard
+  // JSON.parse crash once tool failures carry an invisible marker character
+  // (toolFailure(), _core/errors.ts) that a leaked value would smuggle into
+  // an unrelated later test's output. vi.resetAllMocks() clears queued
+  // once-implementations too — the correct hygiene regardless of this round's
+  // change.
+  vi.resetAllMocks();
   resetMonitorStore();
 });
 
@@ -78,10 +89,10 @@ describe("C7: Requested Fields conf/source annotation flip must not cause false 
 
     const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
 
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r1.status).toBe("baseline_recorded");
 
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("unchanged");
   });
 
@@ -96,7 +107,7 @@ describe("C7: Requested Fields conf/source annotation flip must not cause false 
     const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
 
     await novadaMonitor(params, "test-key");
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("unchanged");
   });
 
@@ -111,7 +122,7 @@ describe("C7: Requested Fields conf/source annotation flip must not cause false 
     const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
 
     await novadaMonitor(params, "test-key");
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("changed");
   });
 });
@@ -120,7 +131,7 @@ describe("C7: Requested Fields conf/source annotation flip must not cause false 
 
 describe("C8: extraction failure sentinels must not be hashed as content baseline", () => {
   it("returns error/unavailable status (NOT baseline_recorded) when extract returns ## Extract Failed sentinel", async () => {
-    const failureOutput = [
+    const failureOutput = toolFailure([
       `## Extract Failed`,
       `url: https://this-host-does-not-exist-xyz.invalid`,
       ``,
@@ -131,12 +142,12 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
       ``,
       `## Agent Action`,
       `agent_instruction: status:failed | verify_url_accessibility`,
-    ].join("\n");
+    ].join("\n"));
 
     mockedExtract.mockResolvedValueOnce(failureOutput);
 
     const params = validateMonitorParams({ url: "https://this-host-does-not-exist-xyz.invalid", format: "json" });
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
 
     // Must NOT return baseline_recorded
     expect(r1.status).not.toBe("baseline_recorded");
@@ -145,19 +156,19 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
   });
 
   it("returns error/unavailable status when extract returns ## Extraction Error sentinel", async () => {
-    const timeoutOutput = [
+    const timeoutOutput = toolFailure([
       `## Extraction Error`,
       `url: https://this-host-does-not-exist-xyz.invalid`,
       `error: Request exceeded the 60s total ceiling and was aborted.`,
       ``,
       `## Agent Action`,
       `agent_instruction: This URL took too long (>60s). Try render="static" to skip escalation.`,
-    ].join("\n");
+    ].join("\n"));
 
     mockedExtract.mockResolvedValueOnce(timeoutOutput);
 
     const params = validateMonitorParams({ url: "https://this-host-does-not-exist-xyz.invalid", format: "json" });
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
 
     expect(r1.status).not.toBe("baseline_recorded");
     expect(["error", "unavailable", "extraction_failed"].some(s => r1.status === s)).toBe(true);
@@ -165,7 +176,7 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
 
   it("varying error message must NOT produce false changed (because error should never be baselined)", async () => {
     // Simulate two calls both returning failure but with different error text
-    const fail1 = [
+    const fail1 = toolFailure([
       `## Extract Failed`,
       `url: https://this-host-does-not-exist-xyz.invalid`,
       ``,
@@ -173,9 +184,9 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
       ``,
       `## Agent Hints`,
       `- check the domain`,
-    ].join("\n");
+    ].join("\n"));
 
-    const fail2 = [
+    const fail2 = toolFailure([
       `## Extract Failed`,
       `url: https://this-host-does-not-exist-xyz.invalid`,
       ``,
@@ -183,7 +194,7 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
       ``,
       `## Agent Hints`,
       `- check the domain`,
-    ].join("\n");
+    ].join("\n"));
 
     mockedExtract
       .mockResolvedValueOnce(fail1)
@@ -191,22 +202,22 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
 
     const params = validateMonitorParams({ url: "https://this-host-does-not-exist-xyz.invalid", format: "json" });
 
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r1.status).not.toBe("baseline_recorded");
 
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     // Second call must also return error, NOT "changed"
     expect(r2.status).not.toBe("changed");
     expect(["error", "unavailable", "extraction_failed"].some(s => r2.status === s)).toBe(true);
   });
 
   it("markdown format also returns error status on ## Extract Failed", async () => {
-    const failureOutput = [
+    const failureOutput = toolFailure([
       `## Extract Failed`,
       `url: https://this-host-does-not-exist-xyz.invalid`,
       ``,
       `Error: DNS lookup failed`,
-    ].join("\n");
+    ].join("\n"));
 
     mockedExtract.mockResolvedValueOnce(failureOutput);
 
@@ -221,9 +232,11 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
   // Regression (P1): the hosted browser-unavailable path returns
   // "## Browser Mode Unavailable" (utils/runtime.ts). It previously slipped past
   // the C8 guard (which only checked ## Extract Failed / ## Extraction Error)
-  // and got hashed + baselined. Now covered by isExtractionFailureSentinel().
+  // and got hashed + baselined. Now covered structurally: every failure string
+  // (including this one) is wrapped by toolFailure(), detected via
+  // isToolFailure() — no heading-text list to keep in sync.
   it("returns error/unavailable status (NOT baseline_recorded) when extract returns ## Browser Mode Unavailable sentinel", async () => {
-    const browserUnavailableOutput = [
+    const browserUnavailableOutput = toolFailure([
       `## Browser Mode Unavailable`,
       ``,
       `render="browser" (render="browser") requires a persistent CDP WebSocket transport that ` +
@@ -231,12 +244,12 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
       ``,
       `## Agent Action`,
       `agent_instruction: status:browser_unavailable_on_runtime | Use render="render" (Web Unblocker).`,
-    ].join("\n");
+    ].join("\n"));
 
     mockedExtract.mockResolvedValueOnce(browserUnavailableOutput);
 
     const params = validateMonitorParams({ url: "https://example.com/needs-browser", format: "json" });
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
 
     // Must NOT baseline the error page.
     expect(r1.status).not.toBe("baseline_recorded");
@@ -245,16 +258,16 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
   });
 
   it("varying ## Browser Mode Unavailable message must NOT produce a false changed", async () => {
-    const bu1 = [
+    const bu1 = toolFailure([
       `## Browser Mode Unavailable`,
       ``,
       `render="browser" requires NOVADA_BROWSER_WS to be configured. (attempt 1)`,
-    ].join("\n");
-    const bu2 = [
+    ].join("\n"));
+    const bu2 = toolFailure([
       `## Browser Mode Unavailable`,
       ``,
       `render="browser" requires NOVADA_BROWSER_WS to be configured. (attempt 2, different text)`,
-    ].join("\n");
+    ].join("\n"));
 
     mockedExtract
       .mockResolvedValueOnce(bu1)
@@ -262,10 +275,10 @@ describe("C8: extraction failure sentinels must not be hashed as content baselin
 
     const params = validateMonitorParams({ url: "https://example.com/needs-browser", format: "json" });
 
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r1.status).not.toBe("baseline_recorded");
 
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).not.toBe("changed");
     expect(["error", "unavailable", "extraction_failed"].some(s => r2.status === s)).toBe(true);
   });
@@ -359,10 +372,10 @@ describe("D1: full-trailer realistic mock — trailer changes must not affect ha
 
     const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
 
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r1.status).toBe("baseline_recorded");
 
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("unchanged");
   });
 
@@ -383,7 +396,7 @@ describe("D1: full-trailer realistic mock — trailer changes must not affect ha
     const params = validateMonitorParams({ url: "https://example.com", fields: ["title"], format: "json" });
 
     await novadaMonitor(params, "test-key");
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("changed");
   });
 });
@@ -470,10 +483,10 @@ describe("D1-followon: body-internal `---` in fenced code block must not spoof h
 
     const params = validateMonitorParams({ url: "https://docs.example.com/config", fields: ["title"], format: "json" });
 
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r1.status).toBe("baseline_recorded");
 
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("changed");
   });
 
@@ -496,7 +509,7 @@ describe("D1-followon: body-internal `---` in fenced code block must not spoof h
     const params = validateMonitorParams({ url: "https://docs.example.com/config", fields: ["title"], format: "json" });
 
     await novadaMonitor(params, "test-key");
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("unchanged");
   });
 });
@@ -558,10 +571,10 @@ describe("D1-followon-generalize: multiple body-internal `---` lines must not pr
 
     const params = validateMonitorParams({ url: "https://docs.example.com/multi", format: "json" });
 
-    const r1 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r1 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r1.status).toBe("baseline_recorded");
 
-    const r2 = JSON.parse(await novadaMonitor(params, "test-key"));
+    const r2 = JSON.parse(stripToolFailureMark(await novadaMonitor(params, "test-key")));
     expect(r2.status).toBe("changed");
   });
 });

@@ -3,7 +3,7 @@ import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extra
 import { detectJsHeavyContent, deriveTitleFromMarkdown, bodyLooksLikeHtml } from "./extract.js";
 import { compilePatterns, shouldCrawlUrl } from "./crawl.js";
 import { SITE_COPY_HARD_MAX } from "./types.js";
-import { TIMEOUTS } from "../config.js";
+import { TIMEOUTS, RUNTIME } from "../config.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 const SITE_COPY_CONCURRENCY = 3;
@@ -236,10 +236,11 @@ async function discoverPages(params, apiKey, origin, baseHostname, maxPages, sel
  */
 export async function novadaSiteCopy(params, apiKey) {
     // NOV-578 #9: site_copy streams each page to the local ~/Downloads filesystem. On a
-    // read-only serverless FS (Vercel / AWS Lambda) writeFile throws EROFS partway through the
-    // run, and the tool is intentionally not wired into the hosted endpoint. Fail fast with a
-    // clear, actionable message instead of an uncaught crash if it is ever invoked there.
-    if (process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // read-only serverless FS (RUNTIME.canWriteFiles === false — config.ts) writeFile throws
+    // EROFS partway through the run, and the tool is intentionally not wired into the hosted
+    // endpoint. Fail fast with a clear, actionable message instead of an uncaught crash if it
+    // is ever invoked there.
+    if (!RUNTIME.canWriteFiles) {
         throw makeNovadaError(NovadaErrorCode.PRODUCT_UNAVAILABLE, "novada_site_copy writes pages to your local ~/Downloads folder and cannot run on the hosted/serverless endpoint (read-only filesystem). Run the local MCP server (npx novada-mcp) to use site_copy, or use novada_crawl for hosted multi-page extraction.", "serverless_fs_readonly");
     }
     let baseHostname;

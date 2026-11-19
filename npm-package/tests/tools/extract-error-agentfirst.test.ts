@@ -95,9 +95,15 @@ describe("novadaExtract — AggregateError summarization (FIX-A)", () => {
     // Distinct underlying causes from both legs must be visible in the error text.
     expect(result).toMatch(/ECONNREFUSED 1\.2\.3\.4:443/);
     expect(result).toMatch(/ENOTFOUND cell-agentfirst-test\.example|ENOTFOUND cell\.com/);
-    // The concrete agent_instruction guidance (not the old generic "may be rate-limiting").
+    // The concrete agent_instruction guidance.
     expect(result).toContain("agent_instruction:");
-    expect(result).toContain("retry_recommended after 30s");
+    // B7 (wave B/C, 2026-11-18): one of the two causes is ENOTFOUND — the aggregate
+    // message now gets the DNS-specific suggested_fix (getSuggestedFix's dnsSuggestedFix
+    // branch), not the generic "retry_recommended after 30s ... likely blocks both the
+    // datacenter proxy and the web unblocker" anti-bot framing, which is actively wrong
+    // for a DNS failure (there is no site here to "block" anything).
+    expect(result).toMatch(/getaddrinfo ENOTFOUND/);
+    expect(result).not.toMatch(/likely blocks both the datacenter proxy/);
   });
 
   it("single-cause aggregate (both legs reject with the SAME reason) still summarizes cleanly", async () => {
@@ -113,7 +119,10 @@ describe("novadaExtract — AggregateError summarization (FIX-A)", () => {
     expect(result).toContain("## Extract Failed");
     expect(result).not.toContain("All promises were rejected");
     expect(result).toContain("ENOTFOUND nov-single-cause-test.example");
-    expect(result).toContain("retry_recommended after 30s");
+    // B7: same DNS-specific branch as above — a single-cause ENOTFOUND aggregate is
+    // not the anti-bot "likely blocks both the datacenter proxy" framing either.
+    expect(result).toMatch(/getaddrinfo ENOTFOUND/);
+    expect(result).not.toMatch(/likely blocks both the datacenter proxy/);
   });
 });
 

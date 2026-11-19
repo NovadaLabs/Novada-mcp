@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
 import { novadaSearch } from "../../src/tools/search.js";
 import * as extractModule from "../../src/tools/extract.js";
+import { toolFailure } from "../../src/_core/errors.js";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -87,7 +88,7 @@ describe("F6b — extract failure sentinel: outer status=partial, no raw markdow
       const url = (params as { url: string }).url;
       if (url.includes("bad")) {
         // Simulate what novadaExtract returns when extraction fails (sentinel text)
-        return "## Extract Failed\n\nCould not fetch the page.";
+        return toolFailure("## Extract Failed\n\nCould not fetch the page.");
       }
       return "Good page content";
     });
@@ -134,7 +135,7 @@ describe("F6b — extract failure sentinel: outer status=partial, no raw markdow
     ]);
 
     vi.spyOn(extractModule, "novadaExtract").mockResolvedValue(
-      "## Extract Failed\n\nTimeout."
+      toolFailure("## Extract Failed\n\nTimeout.")
     );
 
     const raw = await novadaSearch(
@@ -338,7 +339,7 @@ describe("C4 — '## Extraction Error' timeout-ceiling sentinel must be treated 
       const url = (params as { url: string }).url;
       if (url.includes("timeout-c4")) {
         // This is what extract.ts emits from the TOTAL_REQUEST_CEILING path
-        return "## Extraction Error\nurl: https://example.com/timeout-c4\nerror: Request exceeded the 60s total ceiling and was aborted.\n\n## Agent Action\nagent_instruction: This URL took too long.";
+        return toolFailure("## Extraction Error\nurl: https://example.com/timeout-c4\nerror: Request exceeded the 60s total ceiling and was aborted.\n\n## Agent Action\nagent_instruction: This URL took too long.");
       }
       return "Good page content";
     });
@@ -385,7 +386,7 @@ describe("C4 — '## Extraction Error' timeout-ceiling sentinel must be treated 
     ]);
 
     vi.spyOn(extractModule, "novadaExtract").mockResolvedValue(
-      "## Extraction Error\nurl: https://example.com/slow-md-c4\nerror: Request exceeded the 60s total ceiling."
+      toolFailure("## Extraction Error\nurl: https://example.com/slow-md-c4\nerror: Request exceeded the 60s total ceiling.")
     );
 
     const raw = await novadaSearch(

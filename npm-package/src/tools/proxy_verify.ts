@@ -26,7 +26,7 @@
 //     can enter agent-facing evidence (see sanitizeEchoField).
 
 import http from "node:http";
-import { isHostedEnvironment } from "../config.js";
+import { RUNTIME } from "../config.js";
 
 export interface ProxyVerifyTarget {
   host: string;
@@ -85,12 +85,11 @@ const MAX_ECHO_BODY_BYTES = 64 * 1024;
  * disclose the skip instead.
  *
  * Class-not-instance (review MEDIUM-3): hosted detection reuses the ONE
- * canonical predicate (config.ts isHostedEnvironment — VERCEL / VERCEL_ENV /
- * AWS_LAMBDA_FUNCTION_NAME) instead of a parallel hand-rolled list; the Edge
- * runtime is the only verify-specific member.
+ * canonical runtime snapshot (config.ts RUNTIME) instead of a parallel
+ * hand-rolled list; the Edge runtime is the only verify-specific member.
  */
 export function isVerifySupportedRuntime(): boolean {
-  return !(isHostedEnvironment() || process.env.NEXT_RUNTIME === "edge");
+  return !(RUNTIME.kind !== "local" || process.env.NEXT_RUNTIME === "edge");
 }
 
 // ─── Echo-field sanitization (agent-context injection surface) ───────────────

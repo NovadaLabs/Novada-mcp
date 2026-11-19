@@ -1,8 +1,7 @@
 import { createHash } from "crypto";
 import { z } from "zod";
 import { novadaExtract } from "./extract.js";
-import { redactSecrets, sanitizeServerMsg, LINE_TERMINATOR_CHARS } from "../_core/errors.js";
-import { isExtractionFailureSentinel } from "../utils/runtime.js";
+import { redactSecrets, sanitizeServerMsg, LINE_TERMINATOR_CHARS, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
 // G-2: monitor.ts uses wrapUntrustedInline, NOT the multi-line wrapUntrused the other
 // 9 tools share — see the content_preview comments in formatFirstCheck/formatChanged/
 // formatJson below. wrapUntrusted's `\n`-joined delimiter would reintroduce exactly the
@@ -423,17 +422,20 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     return formatError(params.url, now, sanitizeServerMsg(message), params.format);
   }
 
-  // C8 Fix: Detect extraction failure sentinels BEFORE baselining.
-  // novadaExtract returns "## Extract Failed" / "## Extraction Error" /
-  // "## Browser Mode Unavailable" as a string (not a throw) for certain failure
-  // modes (DNS failure, timeout, hosted browser-tier unavailable, etc.).
-  // Without this guard, the error string gets hashed and stored as a baseline;
-  // a varying error message on the next call falsely reports "changed".
-  // Sentinel list is single-sourced in utils/runtime.ts so a future 4th sentinel
-  // can't slip through here again.
-  if (isExtractionFailureSentinel(content)) {
+  // C8 Fix: Detect an extraction failure BEFORE baselining. novadaExtract
+  // returns a failure string (not a throw) for certain failure modes (DNS
+  // failure, timeout, hosted browser-tier unavailable, etc.) — marked via
+  // toolFailure() (_core/errors.ts) at its own point of origin. Without this
+  // guard, the error string gets hashed and stored as a baseline; a varying
+  // error message on the next call falsely reports "changed".
+  // Round 5 (owner direction): replaced a hand-maintained sentinel-prefix
+  // list (which a future 4th extract failure heading could silently miss)
+  // with the structural isToolFailure() check — there is no list to keep
+  // complete anymore.
+  if (isToolFailure(content)) {
     // Surface the error text directly. The extraction already formatted a full
     // agent-oriented error block; re-use it rather than duplicating the message.
+    content = stripToolFailureMark(content);
     const firstLine = content.split("\n").find((l) => l.startsWith("Error:") || l.startsWith("error:")) ?? "";
     const errorMsg = firstLine ? firstLine.replace(/^[Ee]rror:\s*/, "") : "extraction returned a failure sentinel";
     // TOW2-354: sanitizeServerMsg — same reasoning as the catch block above.
@@ -619,15 +621,15 @@ function formatChanged(
 
 function formatError(url: string, timestamp: string, message: string, format: "markdown" | "json" = "markdown"): string {
   if (format === "json") {
-    return JSON.stringify({
+    return toolFailure(JSON.stringify({
       url,
       status: "error",
       timestamp,
       error: message,
       agent_instruction: "status:error | action: retry_later_or_check_url — failed to extract content from the URL. Check if the URL is accessible, then retry.",
-    }, null, 2);
+    }, null, 2));
   }
-  return [
+  return toolFailure([
     `## Monitor: Error`,
     `url: ${url}`,
     `status: error`,
@@ -637,7 +639,7 @@ function formatError(url: string, timestamp: string, message: string, format: "m
     `## Agent Instruction`,
     `agent_status: error | action: retry_later_or_check_url`,
     `Failed to extract content from the URL. Check if the URL is accessible, then retry.`,
-  ].join("\n");
+  ].join("\n"));
 }
 
 function formatJson(

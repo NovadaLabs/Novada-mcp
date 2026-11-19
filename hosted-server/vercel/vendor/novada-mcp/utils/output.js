@@ -2,6 +2,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { join, resolve, sep } from "path";
 import { homedir } from "os";
 import { isUnauthenticatedTierCall } from "../_core/gate.js";
+import { RUNTIME } from "../config.js";
 /** Absolute root every Novada output must live under. Hard SSRF/path-traversal boundary. */
 export const DOWNLOADS_ROOT = join(homedir(), "Downloads", "novada-mcp");
 /**
@@ -159,11 +160,12 @@ export function toCsv(records) {
  */
 export async function saveOutput(options) {
     const { tool, hint = "output", format, data, cosUrl } = options;
-    // Serverless guard (Vercel = read-only FS outside /tmp): never write to disk; return
-    // a no-op result so tool calls don't crash. This puts the hosted-safe behavior in the
-    // source so re-vendoring to novada-mcpserver no longer needs a manual output.js stub.
-    // Local / CLI usage (no VERCEL env) is unaffected and still writes to ~/Downloads.
-    if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    // Serverless guard (RUNTIME.canWriteFiles === false — config.ts; read-only FS outside
+    // /tmp): never write to disk; return a no-op result so tool calls don't crash. This puts
+    // the hosted-safe behavior in the source so re-vendoring to novada-mcpserver no longer
+    // needs a manual output.js stub. Local / CLI usage is unaffected and still writes to
+    // ~/Downloads.
+    if (!RUNTIME.canWriteFiles) {
         const recordCount = Array.isArray(data) ? data.length : undefined;
         const parts = ["(hosted mode — output not saved to disk)"];
         if (recordCount !== undefined)

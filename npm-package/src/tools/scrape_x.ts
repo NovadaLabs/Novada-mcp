@@ -70,7 +70,12 @@ export const X_SCRAPER_CONFIG: PlatformScraperConfig<XOperation> = {
     returns:
       "Structured post/profile records (post text, like/reply/repost counts, profile bio, follower count, etc.) in the chosen output format{{sibling:novada_scrape}} — same rendering as novada_scrape{{/sibling}}.",
     operationsNote:
-      "3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL. Every x.com catalog operation is currently status:\"ok\" — none are excluded for being backend_broken.",
+      // B1 (2026-11-18): status:"ok" is the 2026-07-13 one-time snapshot, not
+      // a live guarantee — the catalog's `last_live_check_result` field (see
+      // scraper_catalog.ts's x.com block) now carries the more recent signal;
+      // this description disclosure stays truthful about what "ok" actually
+      // means instead of implying a currently-verified-working state.
+      "3 verified-working X (Twitter) operations: a single post by URL, and profile lookup by username or by profile URL. Every x.com catalog operation is status:\"ok\" from its 2026-07-13 verification (none are backend_broken) — but a 2026-11-18 live check found all 3 ops rate-limiting/failing under modest call volume; calls are still forwarded (the backend may have recovered), with a per-call warning when this is detected.",
   },
 };
 

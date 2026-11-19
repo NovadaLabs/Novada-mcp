@@ -29,7 +29,9 @@ import {
   statusBucket,
   resolveProduct,
   resolveFailureClass,
+  classifyDispatchOutcome,
 } from "../api/_telemetry.ts";
+import { toolFailure } from "../vendor/novada-mcp/_core/errors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
@@ -696,33 +698,52 @@ test("mcp.ts source: oninitialized block documents stateless-mode limitation hon
   );
 });
 
-// ─── Fix 4: ceiling timeout result must emit TIMEOUT not ok ──────────────────
+// ─── Fix 4 / Round 7: ceiling timeout result must emit TIMEOUT not ok ────────
+//
+// Round 7 (review HIGH): the two tests that used to live here only grepped
+// mcp.ts's SOURCE TEXT for the strings "## Extraction Error" and "TIMEOUT" —
+// they never executed any code, so they stayed green even after toolFailure()
+// made the actual runtime check (`result.startsWith("## Extraction Error")`)
+// permanently false (the marker is always the first character now). Replaced
+// with executed calls against classifyDispatchOutcome() (api/_telemetry.ts),
+// the real function mcp.ts calls on this exact path — using REAL
+// toolFailure()-marked values, not text literals, as input.
 
-test("mcp.ts source: success path checks for ceiling error before emitting outcome", () => {
-  const src = readFileSync(MCP_TS, "utf8");
-  // The fix must classify a result starting with "## Extraction Error" as TIMEOUT.
-  // Assert that both the detection expression and TIMEOUT outcome literal exist near
-  // the main dispatch result handling (after withWallClock / dispatch call).
-  assert.ok(
-    src.includes("## Extraction Error") || src.includes("Extraction Error"),
-    "mcp.ts must reference the ceiling error marker string for classification",
+test("classifyDispatchOutcome: a real ceiling_timeout-tagged toolFailure() result -> TIMEOUT", () => {
+  const marked = toolFailure(
+    ["## Extraction Error", "url: https://slow.example.com", "error: ceiling exceeded"].join("\n"),
+    "ceiling_timeout",
   );
-  assert.ok(
-    src.includes('"TIMEOUT"'),
-    'mcp.ts success path must have a "TIMEOUT" outcome for ceiling-hit results',
-  );
+  assert.equal(classifyDispatchOutcome(marked), "TIMEOUT");
 });
 
-test("mcp.ts source: TIMEOUT outcome appears near the main scheduleToolEvent ok call", () => {
+test("classifyDispatchOutcome: a toolFailure() result with NO reason tag (or a different reason) -> error, never ok", () => {
+  assert.equal(classifyDispatchOutcome(toolFailure("## Extract Failed\nsomething broke")), "error");
+  assert.equal(classifyDispatchOutcome(toolFailure("## Browser Mode Unavailable\n...", "browser_unavailable")), "error");
+});
+
+test("classifyDispatchOutcome: an UNMARKED string, even one that merely SAYS '## Extraction Error', is ok (never text-based)", () => {
+  // Pendulum: proves the discriminator is the marker, not the wording — the
+  // exact heading text the old, now-removed check matched on, unmarked.
+  assert.equal(classifyDispatchOutcome("## Extraction Error\nurl: https://x\nerror: ceiling exceeded"), "ok");
+});
+
+test("classifyDispatchOutcome: ordinary successful tool output (object, string, anything unmarked) -> ok", () => {
+  assert.equal(classifyDispatchOutcome("## Extracted Content\nreal page body"), "ok");
+  assert.equal(classifyDispatchOutcome({ some: "structured result" }), "ok");
+  assert.equal(classifyDispatchOutcome(null), "ok");
+});
+
+test("mcp.ts source: the success path calls classifyDispatchOutcome(result), not a text literal", () => {
+  // One narrow, legitimate source check (wiring, not behavior): confirms the
+  // success path actually USES the pure function tested above, rather than
+  // re-inlining a text check that would silently diverge from it again.
   const src = readFileSync(MCP_TS, "utf8");
-  // The TIMEOUT classification must sit in the same region as the main dispatch path
-  // (after withWallClock). Find the dispatch call and the following scheduleToolEvent.
-  const dispatchIdx = src.indexOf("withWallClock(\n        name,");
-  assert.ok(dispatchIdx >= 0, "withWallClock dispatch call must exist");
-  // Scan forward from dispatch for the TIMEOUT literal.
-  const regionEnd = src.indexOf("} catch (error)", dispatchIdx);
-  const subSrc = src.slice(dispatchIdx, regionEnd);
-  assert.ok(subSrc.includes('"TIMEOUT"'), '"TIMEOUT" outcome must be set in the dispatch success region');
+  assert.match(
+    src,
+    /scheduleToolEvent\(\{\s*outcome:\s*classifyDispatchOutcome\(result\)\s*\}\)/,
+    "mcp.ts's success path must call scheduleToolEvent({ outcome: classifyDispatchOutcome(result) })",
+  );
 });
 
 // ─── 7. extractOperation — strict ALLOWLIST (not a denylist) ─────────────────
@@ -989,4 +1010,37 @@ test("FAILURE_CLASS_MIRROR drift guard: mirror's classification matches errors.t
 test("FAILURE_CLASS_MIRROR drift guard: resolveFailureClass never guesses for a retired/unknown code", () => {
   assert.equal(resolveFailureClass("SOME_RETIRED_CODE_NOT_IN_ANY_ENUM"), null);
   assert.equal(resolveFailureClass(null), null);
+});
+
+// ─── F1/F3 (2026-11-18 reliability fix wave) ──────────────────────────────────
+
+test("mcp.ts source: CallToolRequestSchema handler is wrapped by applyHonestFailureFlag (F3 single choke point)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(src, /function applyHonestFailureFlag/, "applyHonestFailureFlag helper must be defined");
+  const handlerIdx = src.indexOf('server.setRequestHandler(CallToolRequestSchema, async (request) => {');
+  assert.ok(handlerIdx >= 0, "CallToolRequestSchema handler must exist");
+  const handlerOpen = src.slice(handlerIdx, handlerIdx + 400);
+  assert.match(
+    handlerOpen,
+    /return applyHonestFailureFlag\(await \(async \(\) => \{/,
+    "the CallToolRequestSchema handler body must be wrapped so EVERY branch's result passes through applyHonestFailureFlag before leaving this process"
+  );
+});
+
+test("mcp.ts source: applyHonestFailureFlag never overrides an already-isError:true result (only adds true, never removes it)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  const fnIdx = src.indexOf("function applyHonestFailureFlag");
+  assert.ok(fnIdx >= 0);
+  const fnSrc = src.slice(fnIdx, fnIdx + 600);
+  assert.match(fnSrc, /result\?\.isError === true.*return result/, "an explicit isError:true must short-circuit before the failure-envelope text scan");
+});
+
+test("mcp.ts source: F1 browser-tier caller-key pre-resolution covers both novada_browser and novada_extract (class, not instance)", () => {
+  const src = readFileSync(MCP_TS, "utf8");
+  assert.match(
+    src,
+    /name === "novada_browser" \|\| extractNeedsBrowserTier/,
+    "the caller-key browser-credential pre-resolution gate must cover every tool that can reach fetchViaBrowser, not just novada_browser"
+  );
+  assert.match(src, /const extractNeedsBrowserTier = name === "novada_extract"/);
 });

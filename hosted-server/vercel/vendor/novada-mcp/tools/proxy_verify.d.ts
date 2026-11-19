@@ -31,9 +31,8 @@ export declare const ECHO_URL = "http://ipinfo.io/json";
  * disclose the skip instead.
  *
  * Class-not-instance (review MEDIUM-3): hosted detection reuses the ONE
- * canonical predicate (config.ts isHostedEnvironment — VERCEL / VERCEL_ENV /
- * AWS_LAMBDA_FUNCTION_NAME) instead of a parallel hand-rolled list; the Edge
- * runtime is the only verify-specific member.
+ * canonical runtime snapshot (config.ts RUNTIME) instead of a parallel
+ * hand-rolled list; the Edge runtime is the only verify-specific member.
  */
 export declare function isVerifySupportedRuntime(): boolean;
 declare const ECHO_FIELD_RULES: {

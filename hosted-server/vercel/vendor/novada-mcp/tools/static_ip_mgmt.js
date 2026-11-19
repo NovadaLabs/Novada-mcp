@@ -49,7 +49,7 @@
 import { z } from "zod";
 import { devApiPost, maskCredentials, staticHouseStatusTotal } from "../_core/developer_api.js";
 import { evaluateApprovalGate } from "../utils/approval.js";
-import { isHostedEnvironment } from "../config.js";
+import { RUNTIME } from "../config.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ACTIONS = ["open", "renew", "export", "list", "reveal_credentials"];
@@ -190,7 +190,7 @@ const HOSTED_REFUSED_ACTIONS = {
     },
 };
 function assertActionAvailableOnRuntime(action) {
-    if (!isHostedEnvironment())
+    if (RUNTIME.kind === "local")
         return;
     const { reason, extraInstruction } = HOSTED_REFUSED_ACTIONS[action];
     throw new NovadaError({
@@ -294,7 +294,7 @@ async function handleRevealCredentials(params, apiKey, elicitConfirm) {
     // MUST be the first statement: refuses on hosted before any elicitation
     // check, approval-gate evaluation, or upstream devApiPost call runs — see
     // the design note above and assertActionAvailableOnRuntime's own doc
-    // comment. A complete no-op locally (isHostedEnvironment() is false there).
+    // comment. A complete no-op locally (RUNTIME.kind === "local" there).
     assertActionAvailableOnRuntime("reveal_credentials");
     const { effectiveStatus } = resolveStatus(params.status);
     const requestedLimit = params.limit;

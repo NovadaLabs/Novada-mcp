@@ -155,3 +155,143 @@ describe("summarizeAggregateError", () => {
     expect(result!.causes).toEqual(["cross-realm cause"]);
   });
 });
+
+// ─── F2 (2026-11-18 reliability fix wave): block-class fetch-failure classifier ──
+import { isBlockClassFetchFailure, BLOCK_CLASS_STATUSES, NOT_ESCALATE_STATUSES, toolFailure, isToolFailure, stripToolFailureMark } from "../../src/_core/errors.js";
+
+function axiosLikeError(status: number): unknown {
+  return Object.assign(new Error(`Request failed with status code ${status}`), {
+    isAxiosError: true,
+    response: { status },
+  });
+}
+
+describe("isBlockClassFetchFailure — F2 escalation discriminator", () => {
+  it.each([...BLOCK_CLASS_STATUSES])("status %i escalates (block-class)", (status) => {
+    expect(isBlockClassFetchFailure(axiosLikeError(status))).toBe(true);
+  });
+
+  it.each([...NOT_ESCALATE_STATUSES])("status %i does NOT escalate (genuinely missing/unauthorized)", (status) => {
+    expect(isBlockClassFetchFailure(axiosLikeError(status))).toBe(false);
+  });
+
+  it("escalates when the status is buried inside an AggregateError's .errors list (the real Promise.any shape)", () => {
+    const agg = { name: "AggregateError", message: "All promises were rejected", errors: [axiosLikeError(404), axiosLikeError(403)] };
+    expect(isBlockClassFetchFailure(agg)).toBe(true);
+  });
+
+  it("does NOT escalate when every leg of an AggregateError is a not-escalate status", () => {
+    const agg = { name: "AggregateError", message: "All promises were rejected", errors: [axiosLikeError(404), axiosLikeError(401)] };
+    expect(isBlockClassFetchFailure(agg)).toBe(false);
+  });
+
+  it.each(["ECONNRESET", "ETIMEDOUT", "ECONNABORTED", "socket hang up"])(
+    "network pattern %s escalates even with no HTTP status at all",
+    (pattern) => {
+      expect(isBlockClassFetchFailure(new Error(`connect ${pattern}`))).toBe(true);
+    }
+  );
+
+  it("an unclassified error (no status, no recognized network pattern) does NOT escalate — conservative default", () => {
+    expect(isBlockClassFetchFailure(new Error("something weird happened"))).toBe(false);
+  });
+
+  it("a plain non-error value never throws and returns false", () => {
+    expect(isBlockClassFetchFailure(null)).toBe(false);
+    expect(isBlockClassFetchFailure(undefined)).toBe(false);
+    expect(isBlockClassFetchFailure("just a string")).toBe(false);
+  });
+});
+
+// ─── C3 (wave B/C, 2026-11-18): 419/418/420/444 added, 499 excluded ─────────
+describe("isBlockClassFetchFailure — C3 nonstandard block-class codes", () => {
+  it("419 escalates (live repro: news.ycombinator.com's 'slow down' rate-limit on a plain GET)", () => {
+    expect(isBlockClassFetchFailure(axiosLikeError(419))).toBe(true);
+  });
+
+  it("499 (nginx client-closed-request) does NOT escalate — it means OUR OWN fetch aborted, not a server block", () => {
+    expect(isBlockClassFetchFailure(axiosLikeError(499))).toBe(false);
+  });
+
+  it("every C3-added code (418, 419, 420, 444) is a BLOCK_CLASS_STATUSES member and 499 is not", () => {
+    expect(BLOCK_CLASS_STATUSES.has(418)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(419)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(420)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(444)).toBe(true);
+    expect(BLOCK_CLASS_STATUSES.has(499)).toBe(false);
+    expect(NOT_ESCALATE_STATUSES.has(499)).toBe(false); // unclassified, not "genuinely missing" either
+  });
+});
+
+// ─── F3 (round 5, owner direction): structural toolFailure() marker ──────────
+//
+// Replaces the deleted textual/heading-table approach entirely (no
+// FAILURE_HEADER_LITERALS, no SUCCESS_OR_NEUTRAL_HEADERS, no scanner). A
+// failure is marked at its one point of origin via toolFailure(); the
+// marker's PRESENCE is the only signal — never the text's wording — so a
+// successful result can say literally anything (including the words
+// "error", "failed", "unavailable") without ever being misclassified.
+describe("toolFailure / isToolFailure / stripToolFailureMark — F3 structural marker", () => {
+  it("isToolFailure is true only for text that went through toolFailure()", () => {
+    expect(isToolFailure(toolFailure("## Extract Failed\nsomething broke"))).toBe(true);
+    expect(isToolFailure("## Extract Failed\nsomething broke")).toBe(false); // never marked
+  });
+
+  it("stripToolFailureMark removes the mark and is a no-op on unmarked text", () => {
+    const marked = toolFailure("## Extract Failed\nbody");
+    expect(stripToolFailureMark(marked)).toBe("## Extract Failed\nbody");
+    expect(stripToolFailureMark("plain text")).toBe("plain text");
+  });
+
+  it("the mark survives being the FIRST thing in a JSON-formatted failure (monitor.ts's JSON branch) and strips back to valid JSON", () => {
+    const json = JSON.stringify({ status: "error", error: "boom" });
+    const marked = toolFailure(json);
+    expect(isToolFailure(marked)).toBe(true);
+    const stripped = stripToolFailureMark(marked);
+    expect(() => JSON.parse(stripped)).not.toThrow();
+    expect(JSON.parse(stripped)).toEqual({ status: "error", error: "boom" });
+  });
+
+  // H1's original bug (rounds 1-4): a word-list/heading-table detector reading
+  // TEXT for "error"/"failed"/"unavailable" flips a caller-interpolated
+  // success header to isError:true. Structurally impossible now — there is
+  // no text inspection at all. Prove it directly: a string that is NOT
+  // marked, no matter what it says, is never a failure.
+  it.each([
+    "## Research: common React error boundary patterns\n\nagent_instruction: status:success",
+    "## Extracted Content\nurl: https://example.com/articles/why-extract-failed-is-a-myth\ntitle: Service Unavailable Explained",
+    "## Brand Presence on AI-Company Domains — Error Unavailable Failed Inc\n\nSentiment: positive.",
+  ])("unmarked text is never a failure regardless of wording: %j", (text) => {
+    expect(isToolFailure(text)).toBe(false);
+  });
+
+  it("is false-safe on non-string/empty/nullish input", () => {
+    expect(isToolFailure("")).toBe(false);
+    expect(isToolFailure(undefined)).toBe(false);
+    expect(isToolFailure(null)).toBe(false);
+    expect(isToolFailure(42)).toBe(false);
+  });
+});
+
+
+// ─── F3 wiring check — stdio index.ts (mirrors the hosted mcp.ts structural test) ──
+import { readFileSync } from "fs";
+import { join } from "path";
+import { fileURLToPath } from "url";
+const __dirnameErrorsTest = fileURLToPath(new URL(".", import.meta.url));
+const INDEX_TS = join(__dirnameErrorsTest, "..", "..", "src", "index.ts");
+
+describe("index.ts source: F3 single choke point wiring", () => {
+  it("defines applyHonestFailureFlag and wraps the CallToolRequestSchema handler with it", () => {
+    const src = readFileSync(INDEX_TS, "utf8");
+    assert_match(src, /function applyHonestFailureFlag/);
+    const handlerIdx = src.indexOf('this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {');
+    expect(handlerIdx).toBeGreaterThanOrEqual(0);
+    const handlerOpen = src.slice(handlerIdx, handlerIdx + 600);
+    assert_match(handlerOpen, /return applyHonestFailureFlag\(await \(async \(\) => \{/);
+  });
+});
+
+function assert_match(src: string, re: RegExp) {
+  expect(re.test(src)).toBe(true);
+}

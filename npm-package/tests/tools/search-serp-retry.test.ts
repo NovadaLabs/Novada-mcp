@@ -134,13 +134,68 @@ describe("novadaSearch — single retry on transient upstream SERP failure", () 
     expect(mockedAxios.post).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces the error after two consecutive no-task_id failures (retry exhausted)", async () => {
+  // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+  // result must NEVER trigger the fallback race — each race attempt is a
+  // real, separately billed Scraper API submission. Only a THROWN transient
+  // failure may race; a genuinely empty SERP is reported honestly with 1 call.
+  it("C1 review round 2: a clean, successful-but-EMPTY primary result (no exception) makes exactly 1 submit call — NO fallback race, no extra billed calls", async () => {
+    // Inline-results shape (the fast path, no download round-trip) with a
+    // genuinely empty organic_results array — code:0, no throw anywhere in
+    // submitSearchScrapeTask, a real "this SERP has zero hits" outcome.
+    mockedAxios.post.mockResolvedValue({ data: { code: 0, data: { data: { json: [{ rest: { organic_results: [] } }] } } } });
+
+    const result = await novadaSearch(
+      { query: "clean-empty-no-fallback-unique", engine: "google", num: 10, country: "", language: "" },
+      API_KEY,
+    );
+
+    expect(result).toContain("results:0");
+    expect(result).not.toContain("engines_tried");
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the error after two consecutive no-task_id failures (retry exhausted) — C1: now races the other 2 engines before giving up, not just the one", async () => {
+    // Every engine hits the identical no-task_id shape (mockResolvedValue applies
+    // to every axios.post call, primary AND both fallbacks) — this is the
+    // genuinely-all-engines-failed case, which must surface an honest API_DOWN
+    // (never a silent 0), after trying every engine: 2 (primary + its retry) +
+    // 1 each for duckduckgo and yandex = 4 total submit calls.
     mockedAxios.post.mockResolvedValue({ data: { code: 0, data: { data: {} } } });
 
     await expect(
       novadaSearch({ query: "retry-exhausted-unique", engine: "google", num: 10, country: "", language: "" }, API_KEY),
     ).rejects.toMatchObject({ code: NovadaErrorCode.API_DOWN, retryable: true });
-    expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    expect(mockedAxios.post).toHaveBeenCalledTimes(4);
+  });
+
+  it("C1 (#39): recovers via a fallback engine when the primary engine fails on both its attempts", async () => {
+    // Primary (google): both attempts (initial + single retry) hit the no-task_id
+    // transient failure. One of the 2 raced fallback engines (duckduckgo/yandex)
+    // then succeeds — novadaSearch must return those results instead of surfacing
+    // the primary's error, and disclose the engine that actually served them.
+    mockedAxios.post.mockImplementation(async (_url: string, form: URLSearchParams) => {
+      const scraperId = form.get("scraper_name");
+      if (scraperId === "google.com") {
+        return { data: { code: 0, data: { data: {} } } }; // no-task_id, every attempt
+      }
+      return { data: { code: 0, data: { task_id: `task-fallback-${scraperId}` } } };
+    });
+    mockedAxios.get.mockResolvedValue({
+      data: { organic_results: [{ title: "FromFallback", url: "https://example.com/fallback", description: "d" }] },
+    });
+
+    const result = await novadaSearch(
+      { query: "fallback-engine-recovery-unique", engine: "google", num: 10, country: "", language: "" },
+      API_KEY,
+    );
+
+    expect(result).toContain("FromFallback");
+    expect(result).toContain("https://example.com/fallback");
+    // Primary: 2 attempts (initial + retry). Fallback race: duckduckgo + yandex,
+    // 1 each = 2 more. Total 4 submit calls; result still succeeds.
+    expect(mockedAxios.post).toHaveBeenCalledTimes(4);
+    expect(result).toMatch(/engine:(duckduckgo|yandex) \(via scraper-api\)/);
   });
 });
 
@@ -220,13 +275,13 @@ describe("novadaSearch submit — hosted-aware per-attempt axios timeout (MEDIUM
     expect(secondConfig.timeout).toBeGreaterThan(0);
   });
 
-  it("retry is SKIPPED end-to-end through novadaSearch when a slow first submit failure leaves no room for minRetryAttemptMs — exactly ONE submit call, structured API_DOWN error", async () => {
+  it("retry is SKIPPED on the primary engine when a slow first submit failure leaves no room for minRetryAttemptMs, but the 2 fallback engines are still tried (C1) before the honest API_DOWN", async () => {
     process.env.VERCEL = "1";
     let now = 1_700_000_000_000;
     const dateSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
-    mockedAxios.post.mockImplementationOnce(async () => {
+    mockedAxios.post.mockImplementation(async () => {
       now += 30_000; // consumes 30s of the shared 50s deadline — 20s left, under the 25s minRetryAttemptMs
-      return { data: { code: 0, data: { data: {} } } }; // no-task_id transient failure
+      return { data: { code: 0, data: { data: {} } } }; // no-task_id transient failure, every engine
     });
 
     let thrown: unknown;
@@ -243,7 +298,9 @@ describe("novadaSearch submit — hosted-aware per-attempt axios timeout (MEDIUM
 
     expect(thrown).toBeInstanceOf(NovadaError);
     expect((thrown as NovadaError).code).toBe(NovadaErrorCode.API_DOWN);
-    expect(mockedAxios.post).toHaveBeenCalledTimes(1); // the retry was SKIPPED — budget exhausted
+    // 1 primary (retry skipped — budget exhausted) + 1 each for the 2 raced
+    // fallback engines = 3. Never a silent single-engine giveup (C1).
+    expect(mockedAxios.post).toHaveBeenCalledTimes(3);
   });
 
   it("local (no serverless markers): axios.post's config.timeout stays the original flat 60s, unchanged by this fix", async () => {

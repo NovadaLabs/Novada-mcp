@@ -1,3 +1,4 @@
+import type { CheerioAPI } from "cheerio";
 import type { ExtractParams } from "./types.js";
 export { detectJsHeavyContent } from "../utils/index.js";
 /**
@@ -144,4 +145,23 @@ export declare function looksLikeMarkdown(body: string): boolean;
 export declare function bodyLooksLikeHtml(body: string): boolean;
 /** Derive a title from the body's first ATX H1 (`# Heading`). Null when none is found. */
 export declare function deriveTitleFromMarkdown(body: string): string | null;
+/**
+ * True when a `<table>` has a real header row (≥2 non-empty header cells — excludes
+ * decorative single-column lists, which are a different shape entirely) whose BODY is
+ * either entirely absent-but-marked-loading, or whose rows have every cell beyond the
+ * first (often itself a row label) empty/placeholder.
+ *
+ * Gated on label-WITHOUT-value, not value-absence alone (mirror: a genuinely-empty-
+ * by-design table must not be flagged): a header with ZERO body rows at all is
+ * ambiguous on its own (could legitimately be an empty table) and is only flagged
+ * when the table's own markup also carries an explicit loading/skeleton marker — never
+ * on row-count absence alone. A "No results found" message rendered as one real-text
+ * cell is never in PLACEHOLDER_CELL_VALUES, so it is never mistaken for a hydration gap.
+ *
+ * Scope: `<table>` only (issue #46's own repros are all tables). A list (`<ul>/<ol>`)
+ * variant is a materially different, higher-false-positive-risk shape — ordinary
+ * navigation menus are everywhere and have no "header" concept at all — and is left
+ * for a follow-up rather than risked here; flagged explicitly, not silently dropped.
+ */
+export declare function detectHydrationSuspect($doc: CheerioAPI): boolean;
 //# sourceMappingURL=extract.d.ts.map

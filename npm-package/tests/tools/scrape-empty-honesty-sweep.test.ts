@@ -58,6 +58,34 @@ const DOWNLOAD_WRAPPED_EMPTY_RECORDS = {
 };
 
 /**
+ * Round 5 (independent A/B verifier, 2026-11-18): novada_scrape_instagram's live
+ * failure shape — the `results` array is NOT empty (length 1), so the OLD
+ * `records.length === 0` gate never fired, but the one entry carries no usable
+ * field values at all (every value is null/undefined/"") — functionally
+ * identical to zero records. Same P1-3 class the comment above already names
+ * as the recurring "per-instance fixes kept missing members of the class" bug.
+ */
+const DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD = {
+  data: [{ spider_code: 200, rest: { results: [{ username: null, caption: "", likes: null, url: undefined }] } }],
+  status: 200, headers: {}, config: {} as never, statusText: "OK",
+};
+
+/**
+ * B5 (2026-11-18 reliability program): a NARROWER shape than
+ * DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD above — the record is NOT fully
+ * blank, it echoes back the request's own identifier param ("novadaproxies",
+ * the catalog's dflt example for ins_profiles_username's `username` param —
+ * see preflightSatisfyingParams) with every CONTENT field null. The
+ * pre-existing `hasUsableRecord` check (no_records_extracted) treats the
+ * echoed identifier as "a usable value" and does NOT catch this — it needs
+ * the NEW value-vs-request-params discriminator (`all_fields_empty`).
+ */
+const DOWNLOAD_WRAPPED_IDENTIFIER_ECHO_ONLY_RECORD = {
+  data: [{ spider_code: 200, rest: { results: [{ username: "novadaproxies", bio: null, posts: null, followers: null }] } }],
+  status: 200, headers: {}, config: {} as never, statusText: "OK",
+};
+
+/**
  * Build a params object that passes preflightScrape for (platform, scraperId), derived
  * generically from the catalog (single source of truth): every catalog param key is
  * supplied (satisfies "all" mode, "any" mode, and extraAll alike), preferring the
@@ -199,6 +227,82 @@ describe("F9 observed fixtures — the three hosted-0.9.37 FAIL rows now classif
     mockedAxios.post.mockResolvedValue(SUBMIT_EXPLICIT_EMPTY);
     const result = await tool.dispatch({ operation: opName, params }, "test-key");
     expectEmptyResultEnvelope(result);
+  });
+
+  // Round 5 regression test: the verifier's LIVE finding was a non-empty
+  // array whose only entry had no usable fields — a shape the three cases
+  // above (explicit-empty / empty-download / zero-length-array) do NOT cover.
+  it("novada_scrape_instagram: a non-empty records array whose only entry has NO usable field values is also empty_result, not status: ok", async () => {
+    const { tool, opName, params } = observedCase("novada_scrape_instagram");
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue(DOWNLOAD_WRAPPED_ALL_EMPTY_FIELD_RECORD);
+    const result = await tool.dispatch({ operation: opName, params }, "test-key");
+    expectEmptyResultEnvelope(result);
+    expect(result).toContain("empty_signal: no_records_extracted");
+  });
+
+  // B5 (2026-11-18): the narrower identifier-echo-only shape — distinct from
+  // the fully-blank case above, needs its own signal (all_fields_empty).
+  it("novada_scrape_instagram profile_by_username: a record that only echoes back the request's own `username` param (every content field null) classifies all_fields_empty, not ok", async () => {
+    const tool = TOOL_BY_NAME.get("novada_scrape_instagram")!;
+    const opCfg = tool.config.operations.profile_by_username;
+    const params = preflightSatisfyingParams(tool.config.platform, opCfg.scraperId);
+    expect(params.username, "fixture assumes the catalog dflt for ins_profiles_username's username param").toBe("novadaproxies");
+
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue(DOWNLOAD_WRAPPED_IDENTIFIER_ECHO_ONLY_RECORD);
+    const result = await tool.dispatch({ operation: "profile_by_username", params }, "test-key");
+    expectEmptyResultEnvelope(result);
+    expect(result).toContain("empty_signal: all_fields_empty");
+  });
+
+  // Mirror: a record with ANY genuine non-identifier value (even a falsy-
+  // looking but real one, like followers:0) must NOT be flagged — 0 is real
+  // extracted data, not absence.
+  it("mirror: novada_scrape_instagram profile_by_username with a record carrying ONE real non-identifier value (followers:0) stays a normal success, NOT empty_result", async () => {
+    const tool = TOOL_BY_NAME.get("novada_scrape_instagram")!;
+    const opCfg = tool.config.operations.profile_by_username;
+    const params = preflightSatisfyingParams(tool.config.platform, opCfg.scraperId);
+
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [{ spider_code: 200, rest: { results: [{ username: "novadaproxies", bio: null, followers: 0 }] } }],
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await tool.dispatch({ operation: "profile_by_username", params }, "test-key");
+    expect(result).not.toContain("empty_result");
+    expect(result).not.toContain("empty_signal:");
+    expect(result).toContain("## Scrape Results");
+  });
+
+  // B5 review round 2 (MEDIUM mirror): a record field that merely COINCIDES
+  // with a non-identifier param's value (num/country/format/...) must NOT be
+  // excluded from the real-signal check — only identifier-SHAPED param keys
+  // (id/url/username/asin/query-like) feed the exclusion set. Before this
+  // fix, comparing against EVERY raw param value would have wrongly swallowed
+  // `likes:"10"` here (it coincidentally equals the unrelated `num:"10"` param)
+  // and misclassified this record as all_fields_empty.
+  it("mirror (MEDIUM): a record field that coincidentally equals a GENERIC (non-identifier) param's value — e.g. likes:10 matching num:10 — stays a normal success, NOT all_fields_empty", async () => {
+    mockedAxios.post.mockResolvedValue(SUBMIT_TASK_OK);
+    mockedAxios.get.mockResolvedValue({
+      data: [{ spider_code: 200, rest: { results: [{ username: "novadaproxies", bio: null, likes: "10" }] } }],
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+    const result = await novadaScrape(
+      {
+        platform: "instagram.com",
+        operation: "ins_profiles_username",
+        // `num` is a generic, non-identifier param whose value ("10")
+        // coincidentally matches the record's own `likes` field below.
+        params: { username: "novadaproxies", num: "10" },
+        format: "markdown",
+        limit: 20,
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key",
+    );
+    expect(result).not.toContain("empty_result");
+    expect(result).not.toContain("empty_signal:");
+    expect(result).toContain("## Scrape Results");
   });
 
   it("novada_scrape_facebook: 0-record empty-download response is empty_result, not status: ok", async () => {

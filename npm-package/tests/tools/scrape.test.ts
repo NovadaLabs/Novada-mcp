@@ -1218,6 +1218,30 @@ describe("novadaScrape — resume fast-status pre-check (TOW2-257 Phase 1)", () 
     expect(result).toContain("resume-task-abc123");
   });
 
+  // B5 (2026-11-18): the all_fields_empty discriminator (requestParamValues vs.
+  // records) lives well AFTER the processing-envelope early-returns (both call
+  // sites return before `records` is ever computed) — a still-running task must
+  // never be misclassified as an empty-result signal of any kind.
+  it("B5 mirror: a still-pending resumed task's processing envelope carries NO empty_signal of any kind (all_fields_empty included)", async () => {
+    mockTaskStatus("Pending");
+
+    const result = await novadaScrape(
+      {
+        platform: "amazon.com",
+        operation: "amazon_product_keywords",
+        params: { keyword: "iphone" },
+        format: "markdown",
+        limit: 20,
+        task_id: "resume-task-abc123",
+      } as Parameters<typeof novadaScrape>[0],
+      "test-key"
+    );
+
+    expect(result).toContain("status: processing");
+    expect(result).not.toContain("empty_signal:");
+    expect(result).not.toContain("status: empty_result");
+  });
+
   it("status=Running returns the processing envelope FAST — no download-poll GET at all", async () => {
     mockTaskStatus("Running");
 

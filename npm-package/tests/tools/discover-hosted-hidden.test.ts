@@ -15,14 +15,28 @@ describe("discover: hosted-hidden tool list", () => {
     expect(new Set(HOSTED_HIDDEN_TOOLS).size).toBe(HOSTED_HIDDEN_TOOLS.length);
   });
 
-  // Drift guard: this constant mirrors HOSTED_HIDDEN in mcp.ts. Skipped when the monorepo's
+  // B6 (#44, 2026-11-18): this used to be a drift GUARD — two independently-
+  // maintained arrays (this file's HOSTED_HIDDEN_TOOLS and mcp.ts's own
+  // `HOSTED_HIDDEN = new Set([...])` literal), hand-synced, regex-diffed here
+  // to catch divergence. Now there is only ONE list: mcp.ts imports
+  // HOSTED_HIDDEN_TOOLS from this exact module and derives
+  // `HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS)` — drift is no longer
+  // POSSIBLE, not just caught after the fact. This test asserts that
+  // structural fact (the import + derivation are both present) rather than
+  // diffing two separately-maintained literals. Skipped when the monorepo's
   // hosted-server is not alongside (e.g. a standalone npm-package checkout).
-  it.skipIf(!existsSync(mcpTs))("equals HOSTED_HIDDEN in hosted-server/vercel/api/mcp.ts", () => {
+  it.skipIf(!existsSync(mcpTs))("mcp.ts derives HOSTED_HIDDEN from THIS module's HOSTED_HIDDEN_TOOLS — one source, not two hand-synced copies", () => {
     const src = readFileSync(mcpTs, "utf8");
-    const start = src.indexOf("const HOSTED_HIDDEN = new Set([");
-    expect(start).toBeGreaterThan(-1);
-    const slice = src.slice(start, src.indexOf("]);", start));
-    const hosted = [...slice.matchAll(/"(novada_[a-z_]+)"/g)].map((m) => m[1]).sort();
-    expect([...HOSTED_HIDDEN_TOOLS].sort()).toEqual(hosted);
+    // Review round 2 (LOW): regex tolerant of whitespace/formatting drift
+    // (multi-line import, extra spaces, optional trailing semicolon) — a
+    // brittle exact-string match would false-fail on a harmless reformat.
+    expect(src, "mcp.ts must import HOSTED_HIDDEN_TOOLS from the vendored discover.js").toMatch(
+      /import\s*\{\s*HOSTED_HIDDEN_TOOLS\s*\}\s*from\s*["']\.\.\/vendor\/novada-mcp\/tools\/discover\.js["'];?/,
+    );
+    expect(src, "mcp.ts's HOSTED_HIDDEN must be derived from the imported HOSTED_HIDDEN_TOOLS, not a hand-written literal array").toMatch(
+      /const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*HOSTED_HIDDEN_TOOLS\s*\)\s*;?/,
+    );
+    // Regression fence: the OLD hand-written literal form must never reappear.
+    expect(src).not.toMatch(/const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*\[/);
   });
 });

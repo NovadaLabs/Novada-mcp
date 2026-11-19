@@ -37,6 +37,26 @@ export interface CatalogOp {
   status: "ok" | "backend_broken";
   broken_reason?: string;
   verified: "2026-07-13";
+  /**
+   * B1 (2026-11-18 reliability program): `status`/`verified` above are a
+   * ONE-TIME snapshot from the 2026-07-13 catalog capture — they never get
+   * re-checked, so a tool's description can keep asserting "status ok" long
+   * after the live success rate has degraded (x.com's 3 ops: 2 independent
+   * live calls on 2026-11-18, two different ops, both throttled within
+   * seconds of each other — a real backend reliability signal the static
+   * snapshot has no way to express). Optional, per-op, and ORTHOGONAL to
+   * `status`: `status:"ok"` + `last_live_check_result:"fail"` means "this op
+   * is not known to be permanently broken, but its most recent live probe
+   * did not succeed" — a narrower, more recent, more actionable signal than
+   * `backend_broken`, surfaced the same way (scrape.ts's brokenWarning-style
+   * check, extended with one more branch — see that function's doc comment).
+   * Intended to be written by a NIGHTLY CANARY (not built here): a scheduled
+   * job that runs each catalog op's cheapest live probe once a day and
+   * PATCHes this field (pass → clears it back to `undefined`; a failure sets
+   * it to "fail"/"intermittent" per its own retry policy) — this field is the
+   * write target that job would update; no such job exists yet.
+   */
+  last_live_check_result?: "pass" | "intermittent" | "fail";
 }
 
 export interface CatalogPlatform {
@@ -1144,6 +1164,12 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
         ],
         status: "ok",
         verified: "2026-07-13",
+        // B1 (2026-11-18): live repro — submit hit RATE_LIMITED from the
+        // Scraper API backend. Not reclassified backend_broken (the resume/
+        // classification path handled it correctly, typed error, no false
+        // success) — this is a recent reliability signal, narrower than a
+        // permanent-failure verdict.
+        last_live_check_result: "fail",
       },
       {
         slug: "twitter_profile_username",
@@ -1156,6 +1182,9 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
         ],
         status: "ok",
         verified: "2026-07-13",
+        // B1 (2026-11-18): live repro — a second, unrelated call ~10s after
+        // the first ALSO came back RATE_LIMITED at submit time.
+        last_live_check_result: "fail",
       },
       {
         slug: "twitter_profile_profileurl",
@@ -1168,6 +1197,12 @@ export const SCRAPER_CATALOG: CatalogPlatform[] = [
         ],
         status: "ok",
         verified: "2026-07-13",
+        // B1 (2026-11-18): not independently probed this round (only
+        // post_by_url and profile_by_username were), but shares the same
+        // backend capacity/rate-limit as its 2 siblings above — "intermittent"
+        // (not "fail") reflects that it's not itself confirmed failing, while
+        // still disclosing the sibling signal rather than a bare "ok".
+        last_live_check_result: "intermittent",
       },
     ],
   },

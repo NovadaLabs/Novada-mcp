@@ -37,7 +37,7 @@
 //     the process lifetime. A preview and its matching execute call happen
 //     within the same running server process, so no configuration is
 //     required and the token cannot be forged or replayed across restarts.
-//   - Hosted/serverless (`isHostedEnvironment()` true — Vercel/Lambda, where
+//   - Hosted/serverless (`RUNTIME.kind !== "local"` — Vercel/Lambda/EC2, where
 //     a preview and its execute call can land on DIFFERENT cold-started
 //     instances, each with its own in-memory secret): the secret MUST be
 //     shared across instances, so it is read from `NOVADA_APPROVAL_SECRET`.
@@ -87,7 +87,7 @@
 // `proxy_account_create` has exactly one gated action, so no in-tool
 // collision is possible there either way.
 import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
-import { isHostedEnvironment } from "../config.js";
+import { RUNTIME } from "../config.js";
 import { NovadaError, NovadaErrorCode } from "../_core/errors.js";
 /** Approval tokens are valid for 10 minutes after being minted. */
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
@@ -128,7 +128,7 @@ function sortKeysDeep(value) {
 /** Per-process random secret for local/stdio use. Lazily generated (module singleton). */
 let localProcessSecret;
 function getApprovalSecret(action) {
-    if (isHostedEnvironment()) {
+    if (RUNTIME.kind !== "local") {
         const fromEnv = process.env.NOVADA_APPROVAL_SECRET?.trim();
         if (!fromEnv) {
             // FAIL CLOSED — never fall back to a per-instance random secret on a

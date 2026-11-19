@@ -45,6 +45,7 @@ import {
   buildInitializeEvent,
   emitEvent,
   encryptHqIdentity,
+  classifyDispatchOutcome,
 } from "./_telemetry.js";
 import type { RejectionStage, AuthMethod, McpEventRow } from "./_telemetry.js";
 // HQ log-ingest push (Leo's /mcp/log/create contract) — see ./_hq_push.ts. Fail-safe
@@ -195,8 +196,13 @@ import {
   novadaDiscover,
   validateDiscoverParams,
 } from "../vendor/novada-mcp/tools/index.js";
+// B6 (#44, 2026-11-18): HOSTED_HIDDEN below used to be an independently-
+// maintained array that merely MIRRORED this list (two files, a comment
+// saying "keep in sync", no compiler-enforced link). Import the canonical
+// list directly instead — one source, not two hand-synced copies.
+import { HOSTED_HIDDEN_TOOLS } from "../vendor/novada-mcp/tools/discover.js";
 import vendorPkg from "../vendor/novada-mcp/package.json" with { type: "json" };
-import { NovadaError, NovadaErrorCode, classifyError } from "../vendor/novada-mcp/_core/errors.js";
+import { NovadaError, NovadaErrorCode, classifyError, isToolFailure, stripToolFailureMark } from "../vendor/novada-mcp/_core/errors.js";
 // Real upstream key verification for validateToken — same wallet-balance probe
 // novada_setup already uses to confirm "does this key actually work".
 import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
@@ -204,6 +210,12 @@ import { devApiPost } from "../vendor/novada-mcp/_core/developer_api.js";
 // store-reading resolvers (getWebUnblockerKey → store.apiKey, resolveProxyCredentials,
 // resolveBrowserWs) use the CALLER's key on hosted instead of falling back to server env.
 import { withCredentials, resolveBrowserWs } from "../vendor/novada-mcp/utils/credentials.js";
+// F1 (2026-11-18): read-only lookup into the SAME domain registry extract.ts consults
+// internally, so this dispatch layer can tell WITHOUT re-implementing extract.ts's
+// escalation ladder whether a given novada_extract call will resolve to the browser
+// tier under render="auto" (a registry "browser" hint) — needed to decide whether the
+// caller-key browser-credential pre-resolution below is worth its latency cost.
+import { lookupDomain } from "../vendor/novada-mcp/utils/domains.js";
 // MCP prompts (tool-selection decision trees) — same module the npm server uses (1:1 parity). Static, safe on serverless.
 import { listPrompts, getPrompt } from "../vendor/novada-mcp/prompts/index.js";
 // MCP resources (catalog data: scraper platforms, search engines, countries, etc.)
@@ -531,8 +543,10 @@ function deriveTitle(name: string): string {
 //     valid input fails Anthropic's connector review ("every tool must return a
 //     successful response when called with valid parameters"), so it moved here,
 //     alongside novada_browser_flow (its CDP-session sibling with the identical
-//     architectural limitation). Re-enabling either requires DEPLOYMENT_SUPPORTS_WS=
-//     true on a runtime that can actually hold the WS — not a code change here.
+//     architectural limitation). Re-enabling either requires deploying this
+//     endpoint on a runtime whose RUNTIME.kind is "hosted" (config.ts, round 8) —
+//     a long-lived Node server that declares NOVADA_RUNTIME_KIND=hosted, like
+//     EC2's server.mts — not a code change here.
 //   - novada_site_copy     — writes files to disk; Vercel's function FS is read-only.
 //   - novada_ip_whitelist, novada_capture_apikey — WRITE/destructive account-mutation
 //     actions (whitelist edits, API-key rotation) never ported to the hosted gateway.
@@ -567,16 +581,17 @@ function deriveTitle(name: string): string {
 // pinned against elsewhere (test/tool-catalog-derivation.test.mjs). Its
 // exclusion from HOSTED_ROUTABLE_ALIASES is handled by
 // HOSTED_NEVER_ROUTABLE_NPM_ALIASES below instead.
-const HOSTED_HIDDEN = new Set([
-  "novada_browser_flow",
-  "novada_browser",
-  "novada_site_copy",
-  "novada_ip_whitelist",
-  "novada_capture_apikey",
-  "novada_session_stats",
-  "novada_search_feedback",
-  "novada_verify",
-]);
+// B6 (#44): the 8 names themselves now live in EXACTLY ONE place —
+// discover.ts's `HOSTED_HIDDEN_TOOLS` (imported above) — not here AND there.
+// Before this fix, npm-package's own `novada_discover` listing (which needs
+// to know hosted's hidden set to render its "hosted vs local" note, since it
+// has no access to this file) carried an independently-maintained mirror of
+// this exact array with a comment saying "keep in sync" and no
+// compiler-enforced link; a future addition here with no matching edit there
+// (or vice versa) would silently drift. `new Set(...)` is the only
+// hosted-specific thing left — a Set, not an array, for O(1) `.has()` checks
+// at every site below.
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
 
 // Round 4 (S1-connector, F1 — CLASS fix, independent judge 2026-10-13): the
 // REAL set of tool names this hosted deployment lists — used ONLY to resolve
@@ -939,6 +954,13 @@ async function validateToken(token: string, env: Env): Promise<TokenInfo & { ver
  * read RATE_LIMIT_PER_MIN); this is a cost breaker, not a fairness policy, so
  * sharing the default is deliberate rather than requiring a second env var.
  */
+/** Both rate-limit buckets (pre-auth `pra:` and post-auth `rl:`) are keyed by
+ *  a fixed 60s calendar-minute window — this is also the correct "try again
+ *  in" value, so both the `Retry-After` header and the new `retry_after_seconds`
+ *  body field (C4, #43) reuse this ONE constant rather than two independent
+ *  "60" literals drifting apart. */
+const RATE_LIMIT_RETRY_AFTER_S = 60;
+
 async function preAuthRateLimitExceeded(ip: string, env: Env): Promise<boolean> {
   if (!ip || ip === "unknown") return false;
   const limit = parseInt(env.RATE_LIMIT_PER_MIN || "60", 10);
@@ -1421,6 +1443,36 @@ function sentryBeforeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrum
   return breadcrumb;
 }
 
+// F3 (2026-11-18 reliability fix wave) — hosted mirror of the same choke-point
+// fix in npm-package/src/index.ts: every per-tool branch inside the
+// CallToolRequestSchema handler below already sets isError:true on its own
+// catch path, but a tool that returns a failure STRING without throwing
+// falls through all of those untouched. Round 5 (owner direction): the
+// failure is marked structurally via toolFailure() at its point of origin
+// (_core/errors.ts), not inferred later from the text's wording — this
+// function just strips the mark and flips isError, applied once at the
+// point every branch's result funnels through (the handler is wrapped
+// below), not per-branch.
+function applyHonestFailureFlag<T extends { content?: Array<{ type: string; text?: string }>; isError?: boolean }>(
+  result: T
+): T {
+  // An explicit isError:true (set upstream, e.g. the dispatch catch-block for a
+  // thrown error) must short-circuit before the failure-mark scan below — this
+  // function only ever ADDS isError:true, never removes/downgrades one already set.
+  if (result?.isError === true) return result;
+  if (!Array.isArray(result?.content)) return result;
+  let sawFailureMark = false;
+  const content = result.content.map((block) => {
+    if (block?.type === "text" && isToolFailure(block.text)) {
+      sawFailureMark = true;
+      return { ...block, text: stripToolFailureMark(block.text as string) };
+    }
+    return block;
+  });
+  if (!sawFailureMark) return result;
+  return { ...result, content, isError: true };
+}
+
 // ─── MCP server factory ──────────────────────────────────────────────────────
 function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: string; allowedTools?: Set<string> | null; requestId: string; authMethod: AuthMethod | null; userAgent: string | null; surface: HostedSurface }): Server {
   const policy = SURFACE_POLICIES[ctx.surface];
@@ -1495,6 +1547,10 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
   };
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    // F3: every `return` below resolves this IIFE, not the outer handler
+    // directly — applyHonestFailureFlag() is the ONE choke point that sees
+    // every branch's result (including the one inside withCredentials()).
+    return applyHonestFailureFlag(await (async () => {
     const { name, arguments: args } = request.params;
     // Coerce form-playground stringified numbers/booleans ("num":"3") against
     // this tool's OWN advertised schema — ONCE, here, before any of this
@@ -1668,8 +1724,36 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // tenant-safe per-key cache) and seed it into the store so novadaBrowser uses it. If the
     // caller has no Browser entitlement this stays undefined and the tool returns its own
     // "Not Configured" message — no server-account fallback either way.
+    //
+    // F1 (2026-11-18 reliability fix wave, class-not-instance): this used to gate on
+    // `name === "novada_browser"` ONLY. novada_extract also consumes the browser tier
+    // (its render="browser" / DOMAIN_REGISTRY "browser" hint path calls fetchViaBrowser,
+    // which reads getBrowserWs() → the SAME AsyncLocalStorage store) but was never in
+    // this condition — so even with DEPLOYMENT_SUPPORTS_WS=true set on EC2,
+    // isBrowserAvailableOnRuntime() for an extract call would see `getBrowserWs()`
+    // return undefined (store.browserWs never seeded, NOVADA_BROWSER_WS stripped by
+    // stripServerConsumptionCreds()) and report browser unavailable regardless. Every
+    // tool whose implementation can reach fetchViaBrowser needs this gate — grep
+    // `fetchViaBrowser(` under npm-package/src/tools/ turns up exactly these two
+    // (novada_browser.ts, extract.ts) — add any future one here too.
+    //
+    // F1: for novada_extract specifically, only pay the auto-provision round-trip
+    // when this call can actually reach the browser tier — an explicit
+    // render="browser", OR (render omitted/"auto", the tool's own default) a
+    // DOMAIN_REGISTRY "browser" hint for this URL, same lookup extract.ts does
+    // internally. Without this check, EVERY novada_extract call (including the
+    // ~90% that never touch browser) would pay up to 4s of extra latency —
+    // exactly the "no regression on the easy/static path" requirement this fix
+    // wave is held to. novada_browser itself has no such narrowing: every call
+    // to it needs the browser tier by definition.
+    const extractNeedsBrowserTier = name === "novada_extract" && (
+      argsObj?.render === "browser" ||
+      ((argsObj?.render === undefined || argsObj?.render === "auto") &&
+        typeof argsObj?.url === "string" &&
+        lookupDomain(argsObj.url)?.method === "browser")
+    );
     let browserWs: string | undefined;
-    if (name === "novada_browser") {
+    if (name === "novada_browser" || extractNeedsBrowserTier) {
       // Bound the auto-provision round-trip: it runs BEFORE the withWallClock guard,
       // so a hung management API could otherwise push total latency toward the 60s
       // Vercel function limit. 4s cap → null → the tool emits its own "Not Configured".
@@ -1771,11 +1855,16 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       const content = appendGatewayFooter([{ type: "text" as const, text: sanitized }], statusFooter);
       const notice = policy.firstRunNotice ? await maybeGetFirstRunNoticeHosted(ctx.token) : null;
       if (notice) content.push({ type: "text" as const, text: notice });
-      // Classify in-band ceiling timeout from extractSingle — returned as a string
-      // starting with "## Extraction Error" (not thrown), so it reaches this success
-      // path. Emitting "ok" for a timed-out request is misleading in telemetry.
-      const isCeilingTimeout = typeof result === "string" && result.startsWith("## Extraction Error");
-      await scheduleToolEvent({ outcome: isCeilingTimeout ? "TIMEOUT" : "ok" });
+      // Round 7 (review HIGH, class fix): classifyDispatchOutcome() (api/
+      // _telemetry.ts) replaces an inline `result.startsWith("## Extraction
+      // Error")` check that went permanently false once toolFailure() started
+      // prepending an invisible marker ahead of that text — EVERY
+      // toolFailure()-marked string reaching this success path (not just
+      // ceiling timeouts) was telemetered as outcome "ok". Extracted into a
+      // pure, directly-testable function (test/telemetry.test.mjs) rather
+      // than inlined, so this class of bug has an executed-call regression
+      // test, not a source-text grep.
+      await scheduleToolEvent({ outcome: classifyDispatchOutcome(result) });
       return { content };
     } catch (error) {
       // Alert-gating (noise reduction): handled transient/user errors record a
@@ -1902,6 +1991,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
       };
     }
     }); // end withCredentials
+    })());
   });
 
   // MCP prompts — list + get, delegated to the vendored prompts module (npm parity).
@@ -1951,14 +2041,29 @@ function resourceMetadataUrl(url: URL): string {
   return `${deriveIssuer(url.host, process.env.OAUTH_ISSUER)}/.well-known/oauth-protected-resource/mcp`;
 }
 
-function jsonError(status: number, code: string, message: string, agentInstruction?: string, extraHeaders?: Record<string, string>): Response {
+/**
+ * C4 (#43, 2026-11-18): an extra `data` field, merged in alongside the
+ * existing `code`/`agent_instruction`. Added so a 429 can carry a numeric
+ * `retry_after_seconds` IN THE TOOL-RESULT BODY — the `Retry-After` HTTP
+ * header already existed (G-3), but most MCP clients hand the model only the
+ * JSON-RPC error body, never the raw HTTP headers, so the agent saw prose
+ * ("retry after 60 seconds") with nothing it could reliably parse.
+ */
+function jsonError(
+  status: number,
+  code: string,
+  message: string,
+  agentInstruction?: string,
+  extraHeaders?: Record<string, string>,
+  extraData?: Record<string, unknown>,
+): Response {
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
       error: {
         code: status,
         message,
-        data: { code, agent_instruction: agentInstruction },
+        data: { code, agent_instruction: agentInstruction, ...extraData },
       },
       id: null,
     }),
@@ -2216,8 +2321,11 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   if (await preAuthRateLimitExceeded(ip, env)) {
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
-      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.",
-      { "retry-after": "60" });
+      `Retry after ${RATE_LIMIT_RETRY_AFTER_S} seconds. If you need higher limits, contact sales@novada.com.`,
+      { "retry-after": String(RATE_LIMIT_RETRY_AFTER_S) },
+      // C4 (#43): numeric retry_after_seconds IN THE BODY, not just the HTTP
+      // header most MCP clients never surface to the model.
+      { retry_after_seconds: RATE_LIMIT_RETRY_AFTER_S });
   }
 
   // Auth — validate the token and reject with 401 before any per-key work
@@ -2294,10 +2402,14 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     await emitGuardRejection({ requestId, token, outcome: "GATEWAY_RATE_LIMITED", rejectionStage: "rate_limited", authMethod, userAgent });
     // G-3: Retry-After so standard HTTP clients/SDK backoff logic can act on
     // it, not just the human-readable retry guidance in the message text.
+    // C4 (#43): ALSO a numeric retry_after_seconds in the body (see jsonError's
+    // extraData param) — the header alone is invisible to most MCP clients'
+    // model-facing surface.
     return jsonError(429, "RATE_LIMITED",
       `Too many requests from your IP. Limit is ${env.RATE_LIMIT_PER_MIN || "60"} requests/minute.`,
-      "Retry after 60 seconds. If you need higher limits, contact sales@novada.com.",
-      { "retry-after": "60" });
+      `Retry after ${RATE_LIMIT_RETRY_AFTER_S} seconds. If you need higher limits, contact sales@novada.com.`,
+      { "retry-after": String(RATE_LIMIT_RETRY_AFTER_S) },
+      { retry_after_seconds: RATE_LIMIT_RETRY_AFTER_S });
   }
 
   // Upstream Novada API key — the customer's own key, and ONLY their own key

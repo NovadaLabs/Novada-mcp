@@ -193,6 +193,200 @@ export function summarizeAggregateError(err: unknown): { message: string; causes
   }
 }
 
+// ─── Fetch-failure escalation classification (F2, 2026-11-18 reliability fix) ──
+//
+// render="auto" already escalates static→render→browser when a fetch SUCCEEDS
+// but returns bad CONTENT (bot-challenge / JS-heavy — see extract.ts). It did
+// NOT escalate when the fetch itself FAILS at the HTTP/network level — a 403 on
+// both the direct and proxy legs just propagated straight to the caller in <1s
+// (2026-11-18 layer-study.md Cluster 2: apnews.com, congress.gov, zeit.de,
+// nowsecure.nl all gave up this way while render="render" rescued half of them).
+//
+// Class table, not a one-site check: a status/network-error CLASS that means
+// "this request was actively blocked, a retry via a different fetch path might
+// get through" escalates; a class that means "this resource genuinely doesn't
+// exist / isn't authorized for anyone" does not — retrying via render would
+// waste 10-50s to reproduce the same verdict.
+// Wave B/C (2026-11-18, C3): four nonstandard codes considered for this class —
+// 418, 419, 420, 444 added (genuine deployed block/rate-limit signals below);
+// 499 deliberately excluded (justification below the set).
+export const BLOCK_CLASS_STATUSES: ReadonlySet<number> = new Set([
+  403, 429, 503,
+  520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, // Cloudflare edge errors
+  418, // "I'm a teapot" — several WAF/anti-bot middlewares (e.g. Qwant, some
+  //      custom scraping-detection stacks) deliberately return this as a
+  //      block signal for traffic flagged as automated; never a genuine
+  //      resource-shape error for a real teapot API, so no content domain
+  //      overloads it the way 404 is legitimately overloaded.
+  419, // non-IANA. Confirmed live (C3 repro, 2026-11-18): Hacker News returns
+  //      419 as a "slow down" rate-limit on GET requests. Laravel also uses
+  //      419 for CSRF-token-expired, but that is a POST/PUT session-state
+  //      error — novada_extract only issues GETs, so that meaning cannot
+  //      occur on this code path; safe to treat 419 as block-class here.
+  420, // non-IANA ("Enhance Your Calm") — Twitter/X's pre-429 rate-limit
+  //      code, still returned by some legacy endpoints and a handful of
+  //      other APIs that copied the convention; same retry-via-different-
+  //      path semantics as 429.
+  444, // nginx-specific "No Response" — nginx's documented directive for
+  //      silently dropping requests from bad bots/scrapers. Normally never
+  //      reaches an HTTP client as a real status (nginx closes the socket
+  //      without sending headers, which axios reports as a connection-reset
+  //      network error, already covered by BLOCK_CLASS_NETWORK_PATTERNS
+  //      below); included for the rarer case where an intermediate proxy
+  //      forwards it as a literal status. When it IS observed as a status,
+  //      it is always a deliberate anti-automation block, never a genuine
+  //      "resource doesn't exist" response.
+]);
+// 499 (nginx "Client Closed Request") is deliberately NOT included: it means
+// the CLIENT (our own fetch) closed the connection before the server
+// responded — i.e. our own timeout/abort, not the server blocking us. That
+// case is already covered by the ETIMEDOUT/ECONNABORTED/timeout network
+// patterns below; adding the status too would be redundant, and treating it
+// as a server-side block would be actively wrong (retrying via render would
+// just reproduce our own abort, not route around a block that never happened).
+export const NOT_ESCALATE_STATUSES: ReadonlySet<number> = new Set([400, 401, 404, 410]);
+
+/** Network-level error signatures (no HTTP status at all) that mean "the
+ *  connection itself was interfered with" — same escalate-worthy class as a
+ *  403/503, just surfaced by the transport instead of the server. */
+const BLOCK_CLASS_NETWORK_PATTERNS = [
+  /ECONNRESET/i,
+  /ETIMEDOUT/i,
+  /ECONNABORTED/i,
+  /\btimeout\b/i,
+  /\bEOF\b/i, // "unexpected eof while reading" — TLS-fingerprint rejection (layer-study §3)
+  /socket hang up/i,
+];
+
+/** Extracts every distinct HTTP status code present in `err` — including inside
+ *  an AggregateError's `.errors` list (the direct+proxy race in extract.ts's
+ *  "auto" mode rejects with one of these once BOTH legs fail). Returns an empty
+ *  array when no status is present anywhere (e.g. a pure network error). */
+function collectStatuses(err: unknown): number[] {
+  const statuses: number[] = [];
+  const visit = (e: unknown) => {
+    // Duck-typed rather than `instanceof AxiosError`: any object carrying a
+    // `.response.status` (the shape axios errors — real AxiosError instances
+    // AND any equivalent mock/wrapper used in tests — always expose) is
+    // accepted. instanceof is brittle across module-mock boundaries (vitest's
+    // axios automock) and would silently classify nothing as block-class.
+    const status = (e as { response?: { status?: unknown } })?.response?.status;
+    if (typeof status === "number") statuses.push(status);
+    const errs = (e as { errors?: unknown[] })?.errors;
+    if (Array.isArray(errs)) errs.forEach(visit);
+  };
+  visit(err);
+  return statuses;
+}
+
+/** True when `err` matches one of the network-level block-class patterns above,
+ *  checking every leg of an AggregateError (same recursive shape as collectStatuses). */
+function matchesBlockClassNetworkPattern(err: unknown): boolean {
+  const visit = (e: unknown): boolean => {
+    const msg = e instanceof Error ? `${e.message} ${(e as NodeJS.ErrnoException).code ?? ""}` : String(e);
+    if (BLOCK_CLASS_NETWORK_PATTERNS.some((re) => re.test(msg))) return true;
+    const errs = (e as { errors?: unknown[] })?.errors;
+    return Array.isArray(errs) ? errs.some(visit) : false;
+  };
+  return visit(err);
+}
+
+/**
+ * F2 discriminator: should a static/proxy fetch failure in render="auto" mode
+ * escalate to the render (Web Unblocker) tier, or fail as today?
+ *
+ * - ANY leg's status in BLOCK_CLASS_STATUSES, or any leg matching a block-class
+ *   network pattern → escalate (the block might not apply to a different fetch path).
+ * - No block-class signal anywhere, and at least one leg's status is in
+ *   NOT_ESCALATE_STATUSES (genuinely missing/unauthorized) → do not escalate.
+ * - No status at all and no recognized network pattern (unclassified) → do not
+ *   escalate, matching today's behavior — this function only ADDS escalation
+ *   cases it has positive evidence for, it never removes the existing floor.
+ */
+export function isBlockClassFetchFailure(err: unknown): boolean {
+  if (matchesBlockClassNetworkPattern(err)) return true;
+  const statuses = collectStatuses(err);
+  return statuses.some((s) => BLOCK_CLASS_STATUSES.has(s));
+}
+
+// ─── Honest-failure detection (F3, 2026-11-18 reliability fix) ────────────────
+//
+// Round 5 (owner direction, "越优化越 pure"): replaced a textual/heading-based
+// detector (a 104-entry classification table + a recursive source scanner)
+// with a STRUCTURAL one. A tool fails in exactly one of two ways:
+//  1. It throws (a NovadaError or any Error) — already caught and converted
+//     to isError:true at every dispatch choke point (index.ts/mcp.ts), unchanged.
+//  2. It returns a string that IS the failure — now marked at the exact point
+//     the formatter decides the call failed, via toolFailure() below, instead
+//     of being INFERRED later by reading the returned text for a heading or
+//     status word. There is no table to keep complete and no scanner to run —
+//     the mark travels with the value from its one point of origin.
+//
+// Implementation: a reserved, non-printable sentinel prefix (a Unicode
+// Private-Use-Area code point, never produced by any real formatter's prose,
+// a URL, or caller-supplied text) that toolFailure() prepends and the
+// dispatch choke point strips before the text ever reaches the caller. This
+// is structural, not content-based: the marker's PRESENCE is the signal, not
+// anything about the text's wording — a successful novada_research call on a
+// topic containing the word "error" is never touched by this, because
+// toolFailure() is simply never called on that code path.
+const TOOL_FAILURE_MARKER = "\u{F0001}"; // Unicode Private Use Area (Plane 15) — reserved, never real content
+// Round 7: an optional machine-readable reason tag can follow the marker,
+// terminated by a NUL byte (also never real content) before the human text
+// begins. This is the ONE place a caller that already knows WHY it failed
+// (e.g. extract.ts's TOTAL_REQUEST_CEILING path) can carry that structurally
+// — so a telemetry/outcome consumer (hosted-server/vercel/api/mcp.ts) reads
+// getToolFailureReason() instead of re-deriving "was this a timeout?" from
+// the heading text, which is exactly the bug class this marker exists to
+// close. Still ONE mechanism (one marker, one optional tag), not a second
+// parallel one — toolFailure(text) with no reason behaves identically to
+// before.
+const TOOL_FAILURE_REASON_SEP = "\u0000";
+
+/**
+ * Marks `text` as a tool-level failure. Call this at the exact `return`
+ * statement a formatter uses to report failure — e.g.
+ * `return toolFailure(["## Extract Failed", ...].join("\n"));` — instead of
+ * returning the formatted string bare. The dispatch choke point
+ * (index.ts/mcp.ts) detects the mark via isToolFailure() and sets
+ * isError:true, then strips it via stripToolFailureMark() before the text
+ * reaches the caller — the marker itself is never visible to anyone.
+ *
+ * @param reason  Optional machine-readable tag for a consumer that needs to
+ *                know WHY this failed without inspecting the message text
+ *                (e.g. "ceiling_timeout"). Retrieved via getToolFailureReason().
+ */
+export function toolFailure(text: string, reason?: string): string {
+  return TOOL_FAILURE_MARKER + (reason ? reason + TOOL_FAILURE_REASON_SEP : "") + text;
+}
+
+/** True when `text` was produced by toolFailure() and not yet stripped. */
+export function isToolFailure(text: unknown): boolean {
+  return typeof text === "string" && text.startsWith(TOOL_FAILURE_MARKER);
+}
+
+function splitToolFailureReason(markedBody: string): { reason: string | null; rest: string } {
+  const sepIdx = markedBody.indexOf(TOOL_FAILURE_REASON_SEP);
+  if (sepIdx === -1) return { reason: null, rest: markedBody };
+  return { reason: markedBody.slice(0, sepIdx), rest: markedBody.slice(sepIdx + 1) };
+}
+
+/** Removes the toolFailure() mark (and any reason tag), if present. Safe to
+ *  call on any string (including one that was never marked) — a no-op in
+ *  that case. */
+export function stripToolFailureMark(text: string): string {
+  if (!text.startsWith(TOOL_FAILURE_MARKER)) return text;
+  return splitToolFailureReason(text.slice(TOOL_FAILURE_MARKER.length)).rest;
+}
+
+/** The reason tag passed to toolFailure(text, reason), if any — null when the
+ *  text is unmarked, or marked with no reason tag. Never inspects the human
+ *  message text itself. */
+export function getToolFailureReason(text: unknown): string | null {
+  if (typeof text !== "string" || !text.startsWith(TOOL_FAILURE_MARKER)) return null;
+  return splitToolFailureReason(text.slice(TOOL_FAILURE_MARKER.length)).reason;
+}
+
 // ─── agent_instruction Templates ─────────────────────────────────────────────
 
 const INSTRUCTIONS: Record<NovadaErrorCode, string> = {

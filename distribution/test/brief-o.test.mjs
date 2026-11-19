@@ -266,13 +266,15 @@ test("R2 mirror (external row): declared surface \"hosted\" matching the fetched
 // R3 — hosted_hidden_parseable (shared, non-throwing parse step)
 // =========================================================================================
 
-test("R3 RED: renaming the HOSTED_HIDDEN literal no longer aborts the whole run with a [check] FATAL — it is now a named hosted_hidden_parseable check FAILURE, and every other check still runs and reports normally", async () => {
+test("R3 RED: renaming the HOSTED_HIDDEN_TOOLS literal no longer aborts the whole run with a [check] FATAL — it is now a named hosted_hidden_parseable check FAILURE, and every other check still runs and reports normally", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const path = join(root, "hosted-server", "vercel", "api", "mcp.ts");
+    // B6 (#44, 2026-11-18): the canonical literal moved to discover.ts (mcp.ts now
+    // just imports + derives from it) — mutate the ACTUAL source parseHostedHiddenNames reads.
+    const path = join(root, "npm-package", "src", "tools", "discover.ts");
     const raw = readFileSync(path, "utf8");
-    const mutated = raw.replace("const HOSTED_HIDDEN", "const HOSTED_HIDDEN_RENAMED");
-    assert.notEqual(mutated, raw, "test setup: expected to find the HOSTED_HIDDEN literal to rename");
+    const mutated = raw.replace("export const HOSTED_HIDDEN_TOOLS", "export const HOSTED_HIDDEN_TOOLS_RENAMED");
+    assert.notEqual(mutated, raw, "test setup: expected to find the HOSTED_HIDDEN_TOOLS literal to rename");
     writeFileSync(path, mutated);
 
     // Must NOT reject — this is the whole point of the fix (it used to throw out of runChecks).
@@ -290,7 +292,7 @@ test("R3 RED: renaming the HOSTED_HIDDEN literal no longer aborts the whole run 
   }
 });
 
-test("R3 mirror: an intact HOSTED_HIDDEN literal produces zero hosted_hidden_parseable failures (control)", async () => {
+test("R3 mirror: an intact HOSTED_HIDDEN_TOOLS literal produces zero hosted_hidden_parseable failures (control)", async () => {
   const results = await runChecks(GREEN_ROOT);
   assert.equal(findResult(results, "hosted_hidden_parseable").failures.length, 0);
 });
@@ -300,11 +302,11 @@ test("checkHostedHiddenParseable unit: direct call matches runChecks' own result
   assert.deepEqual(checkHostedHiddenParseable(ctx), []);
 });
 
-test("R3 (checkSurfaceClaims degrades cleanly, no duplicate failure): with HOSTED_HIDDEN unparseable, checkSurfaceClaims itself reports ZERO failures — hosted_hidden_parseable is already the one named failure, by design", async () => {
+test("R3 (checkSurfaceClaims degrades cleanly, no duplicate failure): with HOSTED_HIDDEN_TOOLS unparseable, checkSurfaceClaims itself reports ZERO failures — hosted_hidden_parseable is already the one named failure, by design", async () => {
   const root = cloneFixture(GREEN_ROOT);
   try {
-    const path = join(root, "hosted-server", "vercel", "api", "mcp.ts");
-    writeFileSync(path, readFileSync(path, "utf8").replace("const HOSTED_HIDDEN", "const HOSTED_HIDDEN_RENAMED"));
+    const path = join(root, "npm-package", "src", "tools", "discover.ts");
+    writeFileSync(path, readFileSync(path, "utf8").replace("export const HOSTED_HIDDEN_TOOLS", "export const HOSTED_HIDDEN_TOOLS_RENAMED"));
     const ctx = loadConfig(root);
     const failures = checkSurfaceClaims(ctx);
     assert.deepEqual(failures, []);
@@ -320,7 +322,9 @@ test("tryParseHostedHiddenNames unit: never throws — returns {names, error:nul
 
   const root = cloneFixture(GREEN_ROOT);
   try {
-    rmSync(join(root, "hosted-server", "vercel", "api", "mcp.ts"));
+    // B6 (#44): the canonical literal (and thus the "not found" failure mode) moved
+    // to discover.ts — mcp.ts merely imports it now.
+    rmSync(join(root, "npm-package", "src", "tools", "discover.ts"));
     const bad = tryParseHostedHiddenNames(root);
     assert.equal(bad.names, null);
     assert.ok(bad.error instanceof Error);

@@ -14,6 +14,26 @@ export interface CatalogOp {
     status: "ok" | "backend_broken";
     broken_reason?: string;
     verified: "2026-07-13";
+    /**
+     * B1 (2026-11-18 reliability program): `status`/`verified` above are a
+     * ONE-TIME snapshot from the 2026-07-13 catalog capture — they never get
+     * re-checked, so a tool's description can keep asserting "status ok" long
+     * after the live success rate has degraded (x.com's 3 ops: 2 independent
+     * live calls on 2026-11-18, two different ops, both throttled within
+     * seconds of each other — a real backend reliability signal the static
+     * snapshot has no way to express). Optional, per-op, and ORTHOGONAL to
+     * `status`: `status:"ok"` + `last_live_check_result:"fail"` means "this op
+     * is not known to be permanently broken, but its most recent live probe
+     * did not succeed" — a narrower, more recent, more actionable signal than
+     * `backend_broken`, surfaced the same way (scrape.ts's brokenWarning-style
+     * check, extended with one more branch — see that function's doc comment).
+     * Intended to be written by a NIGHTLY CANARY (not built here): a scheduled
+     * job that runs each catalog op's cheapest live probe once a day and
+     * PATCHes this field (pass → clears it back to `undefined`; a failure sets
+     * it to "fail"/"intermittent" per its own retry policy) — this field is the
+     * write target that job would update; no such job exists yet.
+     */
+    last_live_check_result?: "pass" | "intermittent" | "fail";
 }
 export interface CatalogPlatform {
     domain: string;

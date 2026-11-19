@@ -29,9 +29,15 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MCP_TS = join(__dirname, "..", "api", "mcp.ts");
 const VENDOR_CORE = join(__dirname, "..", "vendor", "novada-mcp", "core.js");
+const VENDOR_DISCOVER = join(__dirname, "..", "vendor", "novada-mcp", "tools", "discover.js");
 
 const mcpSrc = readFileSync(MCP_TS, "utf8");
 const { TOOLS: CORE_TOOLS, HIDDEN_ALIASES: NPM_HIDDEN_ALIASES } = await import(VENDOR_CORE);
+// B6 (#44, 2026-11-18): mcp.ts's `const HOSTED_HIDDEN = new Set([...])` literal
+// was folded into `new Set(HOSTED_HIDDEN_TOOLS)` — ONE canonical list,
+// discover.ts's `HOSTED_HIDDEN_TOOLS`, imported here the same way CORE_TOOLS
+// already is, instead of regex-parsing a bracket literal out of mcp.ts source.
+const { HOSTED_HIDDEN_TOOLS } = await import(VENDOR_DISCOVER);
 
 function sliceBetween(startAnchor, endAnchor, label) {
   const start = mcpSrc.indexOf(startAnchor);
@@ -45,8 +51,18 @@ function namesIn(slice) {
   return [...slice.matchAll(/"(novada_[a-zA-Z0-9_]+)"/g)].map((m) => m[1]);
 }
 
-const hostedHiddenSlice = sliceBetween("const HOSTED_HIDDEN = new Set([", "]);", "HOSTED_HIDDEN");
-const HOSTED_HIDDEN = new Set(namesIn(hostedHiddenSlice));
+const HOSTED_HIDDEN = new Set(HOSTED_HIDDEN_TOOLS);
+
+// STATIC regression fence: mcp.ts's own HOSTED_HIDDEN declaration must still be
+// DERIVED from the imported HOSTED_HIDDEN_TOOLS, not reintroduce a second,
+// independently-maintained literal array (the exact drift B6 closed).
+test("mcp.ts's HOSTED_HIDDEN is derived from the imported HOSTED_HIDDEN_TOOLS, not a hand-written literal array", () => {
+  // Review round 2 (LOW): regex tolerant of whitespace/formatting drift
+  // (extra spaces, optional trailing semicolon) rather than a brittle
+  // exact-string match that would false-fail on a harmless reformat.
+  assert.match(mcpSrc, /const\s+HOSTED_HIDDEN\s*=\s*new\s+Set\(\s*HOSTED_HIDDEN_TOOLS\s*\)\s*;?/,
+    "HOSTED_HIDDEN must be `new Set(HOSTED_HIDDEN_TOOLS)` — a hand-written `new Set([...])` literal would silently drift from discover.ts's canonical list again");
+});
 
 const DESTRUCTIVE_TOOL = "novada_ip_whitelist";
 

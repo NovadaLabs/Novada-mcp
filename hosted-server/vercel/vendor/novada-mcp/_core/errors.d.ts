@@ -81,6 +81,45 @@ export declare function summarizeAggregateError(err: unknown): {
     message: string;
     causes: string[];
 } | null;
+export declare const BLOCK_CLASS_STATUSES: ReadonlySet<number>;
+export declare const NOT_ESCALATE_STATUSES: ReadonlySet<number>;
+/**
+ * F2 discriminator: should a static/proxy fetch failure in render="auto" mode
+ * escalate to the render (Web Unblocker) tier, or fail as today?
+ *
+ * - ANY leg's status in BLOCK_CLASS_STATUSES, or any leg matching a block-class
+ *   network pattern → escalate (the block might not apply to a different fetch path).
+ * - No block-class signal anywhere, and at least one leg's status is in
+ *   NOT_ESCALATE_STATUSES (genuinely missing/unauthorized) → do not escalate.
+ * - No status at all and no recognized network pattern (unclassified) → do not
+ *   escalate, matching today's behavior — this function only ADDS escalation
+ *   cases it has positive evidence for, it never removes the existing floor.
+ */
+export declare function isBlockClassFetchFailure(err: unknown): boolean;
+/**
+ * Marks `text` as a tool-level failure. Call this at the exact `return`
+ * statement a formatter uses to report failure — e.g.
+ * `return toolFailure(["## Extract Failed", ...].join("\n"));` — instead of
+ * returning the formatted string bare. The dispatch choke point
+ * (index.ts/mcp.ts) detects the mark via isToolFailure() and sets
+ * isError:true, then strips it via stripToolFailureMark() before the text
+ * reaches the caller — the marker itself is never visible to anyone.
+ *
+ * @param reason  Optional machine-readable tag for a consumer that needs to
+ *                know WHY this failed without inspecting the message text
+ *                (e.g. "ceiling_timeout"). Retrieved via getToolFailureReason().
+ */
+export declare function toolFailure(text: string, reason?: string): string;
+/** True when `text` was produced by toolFailure() and not yet stripped. */
+export declare function isToolFailure(text: unknown): boolean;
+/** Removes the toolFailure() mark (and any reason tag), if present. Safe to
+ *  call on any string (including one that was never marked) — a no-op in
+ *  that case. */
+export declare function stripToolFailureMark(text: string): string;
+/** The reason tag passed to toolFailure(text, reason), if any — null when the
+ *  text is unmarked, or marked with no reason tag. Never inspects the human
+ *  message text itself. */
+export declare function getToolFailureReason(text: unknown): string | null;
 /**
  * Review round 1 (2026-07-30, CRITICAL — live-verified over stdio, and LIVE in
  * prod on mcp.novada.com v0.9.32 today): every newline-handling pattern in this

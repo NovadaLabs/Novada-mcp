@@ -19,7 +19,7 @@
  */
 
 import { PLATFORM_SCRAPER_TOOLS } from "../vendor/novada-mcp/tools/platform_scrapers.js";
-import { NovadaErrorCode } from "../vendor/novada-mcp/_core/errors.js";
+import { NovadaErrorCode, isToolFailure, getToolFailureReason } from "../vendor/novada-mcp/_core/errors.js";
 import type { FailureClass } from "../vendor/novada-mcp/_core/errors.js";
 
 // NOTE ON FILE STRUCTURE: the governed product-map / status-bucket / failure-class
@@ -226,6 +226,26 @@ export function statusBucket(input: { outcome: string | null; gatewayCeilingHit?
   // "GATEWAY_RATE_LIMITED", "MISSING_TOKEN", "INVALID_TOKEN", "TIMEOUT",
   // "INVALID_PARAMS", and a generic "error" — is a customer-visible failure.
   return "failed";
+}
+
+/**
+ * Round 7 (review HIGH, class fix): classifies the dispatch() RESULT on the
+ * success (non-throw) path into a scheduleToolEvent outcome string. Extracted
+ * into a pure, directly-testable function — mcp.ts's own success-path handler
+ * used to inline `result.startsWith("## Extraction Error")`, which went
+ * permanently false the moment toolFailure() started prepending an invisible
+ * marker ahead of that text, so EVERY toolFailure()-marked string reaching
+ * this success path (not just a ceiling timeout) was telemetered as "ok".
+ *
+ * Structural, never text-based: isToolFailure() is the general failure
+ * signal; getToolFailureReason() carries the SPECIFIC "ceiling_timeout" tag
+ * extract.ts attaches at its own point of origin (_core/errors.ts) — no
+ * heading text is ever inspected here.
+ */
+export function classifyDispatchOutcome(result: unknown): "ok" | "TIMEOUT" | "error" {
+  if (getToolFailureReason(result) === "ceiling_timeout") return "TIMEOUT";
+  if (isToolFailure(result)) return "error";
+  return "ok";
 }
 
 /** Row shape matching the mcp_events table. ts is a server default (omitted). */

@@ -2,9 +2,10 @@ import { normalizeUrlForResultDedup, decodeBingRedirect } from "../utils/index.j
 import { saveOutput } from "../utils/output.js";
 import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
+import { submitSearchScrapeTask, resolveSearchResults, boundQuery } from "./search.js";
 import type { ProgressReporter } from "./crawl.js";
-import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets } from "../_core/errors.js";
+import { makeNovadaError, NovadaError, NovadaErrorCode, redactSecrets, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
+import { raceEngineFallbacks, type FallbackAttempt } from "../_core/search-fallback.js";
 import { wrapUntrusted, unwrapUntrusted } from "../utils/untrusted.js";
 
 // C1: distinguish a REAL account-level entitlement failure (Scraper API not
@@ -67,6 +68,11 @@ interface ResearchFilterParams {
 /**
  * Search with primary engine first, race fallbacks on failure.
  * Best case: 1 API call. Failure case: 3 API calls (1 primary + 2 raced).
+ *
+ * C1 (#39, 2026-11-18): the actual race is now the SAME shared primitive
+ * novada_search uses (`raceEngineFallbacks`, `_core/search-fallback.ts`) —
+ * this function is just research-specific plumbing (which engines, how to
+ * submit+resolve one, the entitlement-signal side channel) around it.
  */
 async function searchWithFallback(
   apiKey: string,
@@ -82,28 +88,41 @@ async function searchWithFallback(
     if (signal && isEntitlementError(err)) signal.entitlement = true;
   };
 
+  const attempt = (eng: SearchEngine): FallbackAttempt<NovadaSearchResult> => ({
+    label: eng.name,
+    run: async () => {
+      try {
+        const submitted = await submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams);
+        return await resolveSearchResults(apiKey, submitted);
+      } catch (err) {
+        note(err);
+        throw err;
+      }
+    },
+  });
+
   // Attempt 1: Primary engine (Google) — cheapest path
   try {
-    const submitted = await submitSearchScrapeTask(apiKey, PRIMARY.name, PRIMARY.id, query, num, PRIMARY.param, PRIMARY.supportsNum, filterParams);
-    const results = await resolveSearchResults(apiKey, submitted);
-    if (results.length > 0) return results;
-  } catch (err) { note(err); /* fall through to fallback race */ }
+    const results = await attempt(PRIMARY).run();
+    // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+    // (no exception — the SERP genuinely has no hits for THIS sub-query) must
+    // never trigger the fallback race — each race attempt is a real, separately
+    // billed Scraper API submission, and racing 2 more engines on every
+    // legitimately-empty sub-query would silently multiply the billed cost of
+    // the common case (a `deep`/`comprehensive` research call already fans out
+    // to several sub-queries; tripling EACH one compounds fast). Return the
+    // empty result honestly — novadaResearch's own caller-side retry-with-
+    // simplified-query already covers the "maybe the query itself was too
+    // narrow" case without racing extra engines. Same rule as novada_search
+    // (search.ts) — one rule, both callers, not two independently-tunable
+    // cost policies.
+    return results;
+  } catch { /* primary FAILED transiently — race the fallback engines below */ }
 
-  // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery
-  const attempts = FALLBACKS.map(eng =>
-    submitSearchScrapeTask(apiKey, eng.name, eng.id, query, num, eng.param, eng.supportsNum, filterParams)
-      .then(submitted => resolveSearchResults(apiKey, submitted))
-      .then(results => {
-        if (results.length === 0) throw new Error("empty results");
-        return results;
-      })
-      .catch((err: unknown) => { note(err); throw err; })
-  );
-  try {
-    return await Promise.any(attempts);
-  } catch {
-    return []; // all engines failed
-  }
+  // Attempt 2: Race fallback engines (DDG + Bing in parallel) — fastest recovery.
+  // Only reached when the primary attempt THREW; never for a clean empty result.
+  const outcome = await raceEngineFallbacks(FALLBACKS.map(attempt));
+  return outcome.results; // [] when every fallback engine ALSO failed or emptied
 }
 
 // ─── Domain Detection ──────────────────────────────────────────────────────
@@ -579,17 +598,23 @@ export async function novadaResearch(
     const extractResults = await Promise.allSettled(
       topSources.map(async (source) => {
         try {
-          const content = await novadaExtract(
+          const rawContent = await novadaExtract(
             { url: source.url, format: "markdown", query: params.question, render: "auto" },
             apiKey
           );
-          // Skip failed extractions.
-          // extract.ts returns "## Extract Failed" on generic errors (extract.ts:242)
-          // and "## Extraction Error" on TOTAL_REQUEST_CEILING timeout (extract.ts:1294).
-          // Both must be caught here so timeout error text never reaches source-material assembly.
-          if (content.startsWith("## Extract Failed") || content.startsWith("## Extraction Error")) {
+          // Round 6 (review HIGH, class fix): novadaExtract is called in-process here —
+          // this consumer is OUTSIDE the one transport choke point (applyHonestFailureFlag
+          // in index.ts/mcp.ts), so it must detect failure via isToolFailure() itself,
+          // never by re-deriving its own copy of extract.ts's failure heading text. The
+          // old `content.startsWith("## Extract Failed" | "## Extraction Error")` check
+          // silently broke the moment toolFailure() started prepending an invisible
+          // marker ahead of that text — every failed extraction's error text was treated
+          // as source material instead of being skipped (round-3f-gap.test.ts's mock of
+          // the bare unmarked string stayed green for a world that no longer exists).
+          if (isToolFailure(rawContent)) {
             return { ok: false as const, title: source.title, url: source.url, snippet: source.snippet };
           }
+          const content = stripToolFailureMark(rawContent);
           // Strip all extract-output metadata — only keep the page body content.
           // R1/R9: extract prepends a save-header — `📁 ...` (local) or `path: ...`
           // (hosted, often EMPTY as `path: `). Both must be removed or the dangling
@@ -667,7 +692,7 @@ export async function novadaResearch(
   // outage becomes a false permanent "activate the Scraper API" dead-end.
   if (failedCount === queries.length || totalResults === 0) {
     if (authSignal.entitlement) {
-      return [
+      return toolFailure([
         `## Research Unavailable`,
         ``,
         `Search failed with an account/authorization error. The Scraper API (which powers search) is not activated on this API key, or the key is invalid.`,
@@ -684,11 +709,11 @@ export async function novadaResearch(
         ``,
         `## Agent Action`,
         `agent_instruction: status:search_unavailable | action: call novada_account(section="summary") to confirm, then activate_scraper_api | question_not_answered: true`,
-      ].join("\n");
+      ].join("\n"));
     }
     // No auth signal → transient / no-results. Retry is the real remedy; do NOT
     // assert a permanent activation defect.
-    return [
+    return toolFailure([
       `## Research Incomplete`,
       ``,
       `All search queries returned 0 results — likely a temporary upstream issue (timeout, rate-limit, or a query that matched nothing), not an account problem.`,
@@ -705,7 +730,7 @@ export async function novadaResearch(
       ``,
       `## Agent Action`,
       `agent_instruction: status:search_temporarily_failed | action: retry_once; if it persists call novada_account(section="summary") | question_not_answered: true`,
-    ].join("\n");
+    ].join("\n"));
   }
 
   // NOV-319 phase 4/4: assembling the cited source material.
@@ -1380,11 +1405,42 @@ export function generateSearchQueries(
   const safeQuestion = question.length > MAX_QUESTION_LENGTH_FOR_QUERY_GEN
     ? question.slice(0, MAX_QUESTION_LENGTH_FOR_QUERY_GEN)
     : question;
-  const queries: string[] = [safeQuestion];
+  // C5 (#1, 2026-11-18): query #1 used to seed the raw (up to 2000-char)
+  // question verbatim as a sub-query sent upstream — a 90+-word question
+  // routinely failed the SERP's own query-length limits (queries:1/3
+  // succeeded, top_sources:0, failed_queries listing the full question).
+  // Reuse boundQuery() (search.ts) — the SAME word-boundary 500-char policy
+  // novada_search already applies to every outgoing query — rather than
+  // inventing a second truncation rule here. `topic`/`keywords`/comparand
+  // extraction below still use the unbounded `safeQuestion`; only the
+  // QUERY SENT UPSTREAM is bounded.
+  const queries: string[] = [boundQuery(safeQuestion).query];
   const words = safeQuestion.toLowerCase().split(/\s+/);
   // F14-2: use full topic (without trailing punctuation) as base for sub-queries
   const topic = safeQuestion.replace(/[?!.]+$/, "").trim();
   const keywords = words.filter(w => !STOP_WORDS.has(w) && !ALL_SIGNAL_WORDS.has(w) && w.length > 2);
+
+  // C5 review round 3 (#1, RC verifier): query #1 above is bounded, but every
+  // OTHER generated query below used to build on the full, UNBOUNDED `topic`
+  // (`${topic} ${domainSuffixes[n]}`, comparison residual, etc.) — for a
+  // genuinely long question, "topic" alone already exceeds the engine's query
+  // length limit before any suffix is even appended, so sub-queries #2+ failed
+  // upstream (1/5 or 2/5 succeeded live, below the "≥3 ok" bar). Once `topic`
+  // already eats most of the per-query budget, derive every SUFFIX-APPENDED
+  // query from a CONDENSED topic (the first 15 content keywords, already
+  // stop-word-filtered above) instead of the full text + suffix — keeps the
+  // suffix itself meaningful and visible rather than silently chopped off by
+  // the final bound below. Short/medium topics (the overwhelming common case,
+  // every existing fixture) are completely unaffected: this only activates
+  // once `topic` alone would leave no room for a suffix. `derivedTopic`
+  // replaces `topic` in EVERY place below that builds a suffix/residual
+  // query — one basis value, not a per-branch patch — while comparand
+  // EXTRACTION above still reads the full, unbounded question (identifying
+  // "which entities are being compared" must never be truncated).
+  const SUFFIX_QUERY_TOPIC_BUDGET = 350; // leaves >=150 chars for suffix/focus, well under boundQuery's 500-char cap
+  const derivedTopic = topic.length > SUFFIX_QUERY_TOPIC_BUDGET
+    ? (keywords.slice(0, 15).join(" ") || topic.slice(0, SUFFIX_QUERY_TOPIC_BUDGET))
+    : topic;
 
   // Apply focus to sub-queries if provided
   const focusSuffix = focus ? ` ${focus}` : "";
@@ -1397,7 +1453,7 @@ export function generateSearchQueries(
   const lastYear = thisYear - 1;
 
   if (comparands.length >= 2) {
-    const residual = buildComparisonTopicResidual(topic, comparands);
+    const residual = buildComparisonTopicResidual(derivedTopic, comparands);
     if (residual) {
       const residualSuffix = ` ${residual}`;
       for (const c of comparands) {
@@ -1419,52 +1475,65 @@ export function generateSearchQueries(
     // Genuinely unsupported script — never guess a filler language onto it
     // (requirement 3, fail safe). Keep diversity structural (quoted exact
     // phrase) instead of appending any language's words.
-    queries.push(`"${topic}"${focusSuffix}`);
+    queries.push(`"${derivedTopic}"${focusSuffix}`);
   } else {
     const domainSuffixes = DOMAIN_SUFFIXES_BY_LANG[lang][domain];
     const extra = EXTRA_WORDS_BY_LANG[lang];
     if (keywords.length > 2) {
-      // F14-2: Use full `topic` so named entities (e.g. "Novada", "TypeScript", "Model Context Protocol")
-      // are preserved in derived sub-queries, not truncated by a 4-word slice.
-      queries.push(`${topic} ${domainSuffixes[0]}${focusSuffix}`);
-      queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
+      // F14-2: Use `derivedTopic` (full topic for short/medium questions —
+      // the overwhelming common case — so named entities like "Novada",
+      // "TypeScript", "Model Context Protocol" are preserved; a condensed
+      // keyword-based topic only once the full topic alone would already
+      // exceed the per-query budget) as base for sub-queries.
+      queries.push(`${derivedTopic} ${domainSuffixes[0]}${focusSuffix}`);
+      queries.push(`${derivedTopic} ${domainSuffixes[1]}${focusSuffix}`);
       if (deep || comprehensive) {
-        queries.push(`${topic} ${domainSuffixes[2]}${focusSuffix}`);
-        queries.push(`${topic} ${extra.challengesLimitations}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${domainSuffixes[2]}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${extra.challengesLimitations}${focusSuffix}`);
         // Social queries (reddit/HN) have no clean non-English equivalent —
         // skip rather than append English filler onto a non-English question.
-        // Uses full `topic` (not a truncated keyword slice) so a multi-word
-        // entity ("Model Context Protocol") is never split mid-name here either.
         if (lang === "en") {
-          queries.push(`${topic} reddit discussion opinions`);
+          queries.push(`${derivedTopic} reddit discussion opinions`);
         }
       }
       if (comprehensive) {
-        queries.push(`${topic} ${extra.caseStudyExamples}${focusSuffix}`);
-        queries.push(`${topic} ${lastYear} ${thisYear} trends${focusSuffix}`);
-        if (lang === "en") queries.push(`${topic} hacker news discussion`);
+        queries.push(`${derivedTopic} ${extra.caseStudyExamples}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${lastYear} ${thisYear} trends${focusSuffix}`);
+        if (lang === "en") queries.push(`${derivedTopic} hacker news discussion`);
       }
     } else {
-      queries.push(`"${topic}" ${domainSuffixes[0]}${focusSuffix}`);
-      queries.push(`${topic} ${domainSuffixes[1]}${focusSuffix}`);
+      queries.push(`"${derivedTopic}" ${domainSuffixes[0]}${focusSuffix}`);
+      queries.push(`${derivedTopic} ${domainSuffixes[1]}${focusSuffix}`);
       if (deep || comprehensive) {
-        queries.push(`${topic} ${extra.examplesUseCases}${focusSuffix}`);
-        queries.push(`${topic} ${extra.reviewExperience}${focusSuffix}`);
-        if (lang === "en") queries.push(`${topic} reddit discussion opinions`);
+        queries.push(`${derivedTopic} ${extra.examplesUseCases}${focusSuffix}`);
+        queries.push(`${derivedTopic} ${extra.reviewExperience}${focusSuffix}`);
+        if (lang === "en") queries.push(`${derivedTopic} reddit discussion opinions`);
       }
       if (comprehensive) {
-        queries.push(`${topic} ${extra.bestPractices} ${thisYear}${focusSuffix}`);
-        if (lang === "en") queries.push(`${topic} hacker news discussion`);
+        queries.push(`${derivedTopic} ${extra.bestPractices} ${thisYear}${focusSuffix}`);
+        if (lang === "en") queries.push(`${derivedTopic} hacker news discussion`);
       }
     }
   }
 
+  // C5 review round 3 (#1): the STRUCTURAL guarantee, applied ONCE here to
+  // EVERY generated query — not per-branch. `derivedTopic` above already
+  // keeps a long question's suffix queries meaningful; this bound is what
+  // makes "every generated query fits the engine's length limit" true by
+  // construction, for every question shape/depth/branch (comparison,
+  // unknown-language, focus-suffixed, or not), not just the ones a future
+  // author remembers to condense. Reuses the SAME boundQuery() (search.ts)
+  // policy query #1 already used — one bound, one place, not a second rule.
+  const bounded = queries.map(q => boundQuery(q).query);
+
   // Dedup near-identical generated queries (same text after lowercase +
-  // whitespace normalization) so no suffix addition can reintroduce the
-  // near-duplicate-search bug this fix targets.
+  // whitespace normalization), checked AFTER bounding so a collision
+  // introduced by truncation is caught too, not just a pre-bound one — no
+  // suffix addition (or truncation) can reintroduce the near-duplicate-
+  // search bug this fix targets.
   const seen = new Set<string>();
   const deduped: string[] = [];
-  for (const q of queries) {
+  for (const q of bounded) {
     const key = q.toLowerCase().replace(/\s+/g, " ").trim();
     if (seen.has(key)) continue;
     seen.add(key);

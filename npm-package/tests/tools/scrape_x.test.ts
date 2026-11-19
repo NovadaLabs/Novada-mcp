@@ -119,3 +119,51 @@ describe("novadaScrapeX — enum safety (only catalog-'ok' operations reachable)
     expect(xPlatform!.ops.every((op) => op.status === "ok"), "x.com catalog has a backend_broken op not reflected in this assertion").toBe(true);
   });
 });
+
+// B1 (2026-11-18 reliability program): a 2026-11-18 live check found all 3
+// x.com ops rate-limiting/failing — status:"ok" alone (the 2026-07-13
+// one-time snapshot) no longer reflects reality. `last_live_check_result`
+// disclosures must reach a SUCCESSFUL call's own output (not just block it),
+// since the call is still forwarded either way (same warn-but-don't-block
+// policy as backend_broken).
+describe("novadaScrapeX — freshness warning when last_live_check_result != 'pass' (B1)", () => {
+  it("post_by_url (last_live_check_result:'fail') prepends a freshness warning to a SUCCESSFUL call's output", async () => {
+    mockSuccess(MOCK_RECORDS);
+    const out = await novadaScrapeX(
+      validateScrapeXParams({ operation: "post_by_url", params: { post_url: "https://x.com/NASA/status/2048903895716364742" } }),
+      "test-key",
+    );
+    expect(out).toContain("most recent live check came back \"fail\"");
+    expect(out).toContain("twitter_post_posturl");
+  });
+
+  it("profile_by_username (last_live_check_result:'fail') also carries the warning", async () => {
+    mockSuccess(MOCK_RECORDS);
+    const out = await novadaScrapeX(
+      validateScrapeXParams({ operation: "profile_by_username", params: { user_name: "BillGates" } }),
+      "test-key",
+    );
+    expect(out).toContain("most recent live check came back \"fail\"");
+  });
+
+  it("profile_by_url (last_live_check_result:'intermittent') carries the warning with the correct severity word, not a hard 'fail'", async () => {
+    mockSuccess(MOCK_RECORDS);
+    const out = await novadaScrapeX(
+      validateScrapeXParams({ operation: "profile_by_url", params: { profile_url: "https://x.com/BillGates" } }),
+      "test-key",
+    );
+    expect(out).toContain("most recent live check came back \"intermittent\"");
+    expect(out).not.toContain("came back \"fail\"");
+  });
+
+  it("mirror: a platform with no last_live_check_result set (amazon.com) gets NO freshness warning on a successful call", async () => {
+    const { novadaScrape } = await import("../../src/tools/scrape.js");
+    mockSuccess(MOCK_RECORDS);
+    const out = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_asin", params: { asin: "B0BWBK8F37" }, format: "markdown", limit: 20 },
+      "test-key",
+    );
+    expect(out).not.toContain("most recent live check came back");
+    expect(out).not.toContain("currently failing on the backend");
+  });
+});

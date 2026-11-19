@@ -7,8 +7,9 @@ import { saveOutput } from "../utils/output.js";
 import { telemetryHeaders } from "../utils/http.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint } from "../_core/errors.js";
+import { classifyBusinessCode, makeNovadaError, NovadaError, NovadaErrorCode, sanitizeServerMsg, redactSecrets, serpCaptureFailedHint, toolFailure, isToolFailure, stripToolFailureMark } from "../_core/errors.js";
 import { withSingleTransientRetry, submitRetryBudget } from "../_core/submit-retry.js";
+import { raceEngineFallbacks, type FallbackAttempt } from "../_core/search-fallback.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
 
 // FIX-2: Max query length to prevent DoS via over-long queries that hang the upstream
@@ -698,6 +699,14 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   // "goto" redirect link could not be resolved to a real URL — surfaced to the
   // agent (never silently swallowed) once non-zero, see below.
   let unresolvedGotoLinks = 0;
+  // C1 (#39, 2026-11-18): which engine ACTUALLY served the returned results —
+  // defaults to the requested one, updated when a cross-engine fallback had
+  // to serve instead. Disclosed in both the json and markdown responses so an
+  // agent never silently gets duckduckgo's results labeled "google".
+  let servedByEngine: string = engine;
+  // Every engine actually attempted (requested first), for disclosure on the
+  // genuinely-empty-everywhere path below.
+  const enginesTried: string[] = [engine];
 
   // H3: an unrecognized engine value is USER INPUT, not an account defect.
   // Returning the entitlement message here falsely told the agent their key was
@@ -705,7 +714,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   // message listing valid engines.
   if (!SCRAPER_SEARCH_ENGINES.has(engine)) {
     const valid = [...SCRAPER_SEARCH_ENGINES].join(", ");
-    return [
+    return toolFailure([
       `## Invalid Parameter — engine`,
       ``,
       `engine="${engine}" is not a supported search engine.`,
@@ -714,7 +723,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       ``,
       `## Agent Instruction`,
       `error: invalid_params | param: engine | valid_values: ${valid} | action: retry with one of the valid engines`,
-    ].join("\n");
+    ].join("\n"));
   }
 
   // Apply domain filters as query modifiers (site: syntax works on all engines)
@@ -753,9 +762,73 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
         ? "social"
         : detectIntent(params.query);
 
-  try {
-    {
-      const engineCfg = ENGINE_MAP[engine];
+  // C1 (#39, 2026-11-18): per-engine submit+resolve, factored out so the
+  // primary attempt (below, wrapped in the existing same-engine single retry)
+  // and the cross-engine fallback race (also below, on failure OR a
+  // legitimately empty primary) share ONE implementation instead of two
+  // copies of the submit/poll/goto-resolve pipeline.
+  const engineTimeParams = {
+    time_range: params.time_range,
+    start_date: params.start_date,
+    end_date: params.end_date,
+    country: params.country || undefined,
+    language: params.language || undefined,
+  };
+  const runEngineSearch = async (
+    cfg: ScraperSearchEngine,
+    timeoutMs: number,
+  ): Promise<{ results: NovadaSearchResult[]; unresolvedGotoLinks: number }> => {
+    const submitted = await submitSearchScrapeTask(
+      apiKey, cfg.scraper_name, cfg.scraper_id, effectiveQuery, overFetchNum,
+      cfg.query_param, cfg.supports_num, engineTimeParams, timeoutMs,
+    );
+    // search-goto-links-2026-11-04: bound the goto-resolution phase to at most
+    // 8s of wall clock OR whatever remains of the shared callDeadline, whichever
+    // is tighter — never a fresh, unbounded allotment on top of submit+poll.
+    const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
+    if (submitted.inlineResults) {
+      return parseAndResolveScraperSearchResults(submitted.inlineResults, { deadlineMs: gotoResolveDeadline });
+    }
+    if (submitted.taskId) {
+      // review2 MEDIUM #2: clamp the poll ceiling to whatever remains of the
+      // SAME callDeadline the submit phase above just drew from — never a
+      // fresh TIMEOUTS.SEARCH_TOTAL_CEILING allotment on top. On local,
+      // callDeadline is Infinity so `remaining` is never binding and this is
+      // a no-op (byte-identical to the pre-fix unconditional default).
+      const pollCeilingMs = Math.min(TIMEOUTS.SEARCH_TOTAL_CEILING, Math.max(0, callDeadline - Date.now()));
+      const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
+      return parseAndResolveScraperSearchResults(resultData, { deadlineMs: gotoResolveDeadline });
+    }
+    return { results: [], unresolvedGotoLinks: 0 };
+  };
+  // search_id label → unresolvedGotoLinks for whichever attempt ends up
+  // serving the final results (the OTHER attempts' counts are discarded —
+  // they never reach the caller).
+  const gotoByEngine = new Map<string, number>();
+  // C1: race the engines OTHER than the one just attempted (requested engine
+  // first; the other 2 members of SCRAPER_SEARCH_ENGINES on a fallback).
+  // Shared with novada_research via _core/search-fallback.ts — ONE fallback
+  // policy, not two independently-maintained ones.
+  const raceOtherEngines = async (excludeScraperName: string) => {
+    const fallbackCfgs = Object.values(ENGINE_MAP).filter(cfg => cfg.scraper_name !== excludeScraperName);
+    enginesTried.push(...fallbackCfgs.map(cfg => Object.entries(ENGINE_MAP).find(([, c]) => c === cfg)![0]));
+    const attempts: FallbackAttempt<NovadaSearchResult>[] = fallbackCfgs.map(cfg => ({
+      label: cfg.scraper_name,
+      run: () => runEngineSearch(cfg, submitRetryBudget(callDeadline).totalMs)
+        .then(r => { gotoByEngine.set(cfg.scraper_name, r.unresolvedGotoLinks); return r.results; }),
+    }));
+    return raceEngineFallbacks(attempts);
+  };
+  const scraperNameToEngineKey = (scraperName: string | null): string | null => {
+    if (!scraperName) return null;
+    const found = Object.entries(ENGINE_MAP).find(([, cfg]) => cfg.scraper_name === scraperName);
+    return found ? found[0] : null;
+  };
+
+  {
+    const engineCfg = ENGINE_MAP[engine];
+    let primaryResults: NovadaSearchResult[] = [];
+    try {
       // FIX B: absorb a single transient "upstream SERP failure" ourselves
       // instead of surfacing it on the first hit — see withSingleSerpRetry above.
       //
@@ -763,95 +836,86 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       // so the retry is wall-clock aware on hosted and submitSearchScrapeTask's
       // own axios timeout for THIS attempt is capped by what remains of that
       // budget, never a flat 60s — see submit-retry.ts's doc comment.
-      // `undefined` keeps the default inter-attempt delay while still
-      // supplying the budget as the 3rd positional argument.
-      //
       // review2 MEDIUM #2: pass `callDeadline` (established once at the top of
       // this function) so the submit budget shares ONE wall-clock budget with
       // the poll phase below, instead of each getting an independent
       // HOSTED_SAFE_CEILING_MS allotment.
-      const submitted = await withSingleSerpRetry(
-        (timeoutMs) => submitSearchScrapeTask(
-          apiKey,
-          engineCfg.scraper_name,
-          engineCfg.scraper_id,
-          effectiveQuery,
-          overFetchNum,
-          engineCfg.query_param,
-          engineCfg.supports_num,
-          {
-            time_range: params.time_range,
-            start_date: params.start_date,
-            end_date: params.end_date,
-            country: params.country || undefined,
-            language: params.language || undefined,
-          },
-          timeoutMs,
-        ),
+      primaryResults = await withSingleSerpRetry(
+        (timeoutMs) => runEngineSearch(engineCfg, timeoutMs)
+          .then(r => { gotoByEngine.set(engineCfg.scraper_name, r.unresolvedGotoLinks); return r.results; }),
         undefined,
         submitRetryBudget(callDeadline),
       );
-      // search-goto-links-2026-11-04: bound the goto-resolution phase to at most
-      // 8s of wall clock OR whatever remains of the shared callDeadline, whichever
-      // is tighter — never a fresh, unbounded allotment on top of submit+poll.
-      const gotoResolveDeadline = Math.min(Date.now() + 8_000, callDeadline);
-      // Fast path: inline results from submit response (no download round-trip needed)
-      if (submitted.inlineResults) {
-        const resolved = await parseAndResolveScraperSearchResults(submitted.inlineResults, { deadlineMs: gotoResolveDeadline });
-        scraperResults = resolved.results;
-        unresolvedGotoLinks += resolved.unresolvedGotoLinks;
-      } else if (submitted.taskId) {
-        // Slow path: poll download endpoint.
-        // review2 MEDIUM #2: clamp the poll ceiling to whatever remains of the
-        // SAME callDeadline the submit phase above just drew from — never a
-        // fresh TIMEOUTS.SEARCH_TOTAL_CEILING allotment on top. On local,
-        // callDeadline is Infinity so `remaining` is never binding and this is
-        // a no-op (byte-identical to the pre-fix unconditional default).
-        const pollCeilingMs = Math.min(TIMEOUTS.SEARCH_TOTAL_CEILING, Math.max(0, callDeadline - Date.now()));
-        const resultData = await pollSearchResult(apiKey, submitted.taskId, pollCeilingMs);
-        const resolved = await parseAndResolveScraperSearchResults(resultData, { deadlineMs: gotoResolveDeadline });
-        scraperResults = resolved.results;
-        unresolvedGotoLinks += resolved.unresolvedGotoLinks;
+    } catch (err: unknown) {
+      // H3: Only genuine auth/entitlement/quota failures mean the SERP endpoint is
+      // "not available for this API key" (a permanent account-level condition). A
+      // transient network blip (timeout, 5xx, DNS, ECONNRESET) must NOT be reported
+      // as a permanent entitlement defect — that sends the agent/customer down a
+      // false "contact support to enable SERP" path. Either way, every ENGINE
+      // shares the same account/key, so these never trigger a cross-engine
+      // fallback — switching engines cannot fix an account-level wall.
+      //
+      // Entitlement signals: HTTP 401/402/403, or an error message carrying a 40x
+      // code / permission / quota / unauthorized / forbidden keyword.
+      const status = err instanceof AxiosError ? err.response?.status : undefined;
+      const msg = err instanceof Error ? err.message : "";
+      // B1 review must-fix #2 (2026-09-21): a typed INSUFFICIENT_BALANCE must
+      // rethrow BEFORE the prose-based entitlement check below — upstream balance
+      // messages can carry entitlement-looking words ("no permission to consume"),
+      // and demoting a balance error to SERP_UNAVAILABLE sends the agent to
+      // "activate the Scraper API" when the product IS active and the fix is a
+      // top-up. Structured classification outranks prose matching.
+      if (err instanceof NovadaError && err.code === NovadaErrorCode.INSUFFICIENT_BALANCE) {
+        throw err;
       }
+      const isEntitlement =
+        status === 401 || status === 402 || status === 403 ||
+        /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission/i.test(msg);
+      if (isEntitlement) {
+        return toolFailure(SERP_UNAVAILABLE);
+      }
+      // Already-classified account-level NovadaError (INVALID_API_KEY /
+      // PRODUCT_UNAVAILABLE / INVALID_PARAMS from submitSearchScrapeTask)
+      // passes through unchanged so its auth/quota semantics survive — never
+      // demote a real auth error to a generic blip, and never burn 2 more
+      // calls racing engines that will hit the identical wall.
+      if (err instanceof NovadaError && err.code !== NovadaErrorCode.API_DOWN) {
+        throw err;
+      }
+      // C1 (#39): the remaining class — API_DOWN (already-classified, e.g.
+      // upstream 500 / code 10000 / no task_id) or a generic network error —
+      // is engine-specific/transient, not account-level. Race the OTHER
+      // engines instead of surfacing the first hit.
+      const outcome = await raceOtherEngines(engineCfg.scraper_name);
+      if (outcome.results.length === 0) {
+        // Never a silent 0 after a genuine upstream error: either fallback
+        // results (handled below) or this honest, disclosed failure.
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          `Search temporarily unavailable on every engine tried (${enginesTried.join(", ")}) — upstream issue: ${sanitizeServerMsg(msg).slice(0, 200)}`,
+        );
+      }
+      primaryResults = outcome.results;
+      servedByEngine = scraperNameToEngineKey(outcome.servedBy) ?? servedByEngine;
     }
-  } catch (err: unknown) {
-    // H3: Only genuine auth/entitlement/quota failures mean the SERP endpoint is
-    // "not available for this API key" (a permanent account-level condition). A
-    // transient network blip (timeout, 5xx, DNS, ECONNRESET) must NOT be reported
-    // as a permanent entitlement defect — that sends the agent/customer down a
-    // false "contact support to enable SERP" path.
-    //
-    // Entitlement signals: HTTP 401/402/403, or an error message carrying a 40x
-    // code / permission / quota / unauthorized / forbidden keyword.
-    const status = err instanceof AxiosError ? err.response?.status : undefined;
-    const msg = err instanceof Error ? err.message : "";
-    // B1 review must-fix #2 (2026-09-21): a typed INSUFFICIENT_BALANCE must
-    // rethrow BEFORE the prose-based entitlement check below — upstream balance
-    // messages can carry entitlement-looking words ("no permission to consume"),
-    // and demoting a balance error to SERP_UNAVAILABLE sends the agent to
-    // "activate the Scraper API" when the product IS active and the fix is a
-    // top-up. Structured classification outranks prose matching.
-    if (err instanceof NovadaError && err.code === NovadaErrorCode.INSUFFICIENT_BALANCE) {
-      throw err;
-    }
-    const isEntitlement =
-      status === 401 || status === 402 || status === 403 ||
-      /code 40[0-9]|permission|quota|unauthorized|forbidden|no permission/i.test(msg);
-    if (isEntitlement) {
-      return SERP_UNAVAILABLE;
-    }
-    // Already-classified NovadaError (e.g. INVALID_API_KEY / API_DOWN from
-    // submitSearchScrapeTask) passes through unchanged so its auth/quota
-    // semantics survive — never demote a real auth error to a generic blip.
-    if (err instanceof NovadaError) {
-      throw err;
-    }
-    // Everything else (network / 5xx / timeout / DNS / ECONNRESET) is transient →
-    // route through the retryable API_DOWN envelope with a sanitized upstream note.
-    throw makeNovadaError(
-      NovadaErrorCode.API_DOWN,
-      `Search temporarily unavailable — upstream issue: ${sanitizeServerMsg(msg).slice(0, 200)}`,
-    );
+
+    // C1 review round 2 (HIGH, cost): a clean, successful-but-EMPTY primary
+    // result (no exception — the SERP genuinely has no hits) must NEVER
+    // trigger the fallback race. Each race attempt is a real, separately
+    // billed Scraper API submission (README: "every call bills your Novada
+    // account balance directly") — racing 2 more engines on every merely-
+    // narrow/niche query that legitimately returns 0 results would silently
+    // triple the billed cost of the common case for zero benefit (a
+    // genuinely empty SERP on google is not evidence duckduckgo/yandex has
+    // the page). The fallback race above only ever runs when the primary
+    // attempt itself THREW a transient (non-account-level) error — the only
+    // signal that switching engines might actually help. A clean empty is
+    // reported honestly below (broaden the query / try another engine
+    // explicitly), with zero extra billed calls. Same rule for
+    // novada_research's searchWithFallback (research.ts) — one rule, both
+    // callers, not two independently-tunable cost policies.
+    scraperResults = primaryResults;
+    unresolvedGotoLinks += gotoByEngine.get(ENGINE_MAP[servedByEngine].scraper_name) ?? 0;
   }
 
   let results: NovadaSearchResult[] = scraperResults;
@@ -889,11 +953,16 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
       // because its Google redirect link could not be resolved — otherwise "no
       // results" looks identical to a genuinely empty SERP.
       if (unresolvedGotoLinks > 0) emptyJson.goto_links_unresolved = unresolvedGotoLinks;
+      // C1: when the fallback race was actually attempted, disclose every
+      // engine tried — this "0 results" is an honest, cross-engine-confirmed
+      // empty SERP, not just one engine's miss.
+      if (enginesTried.length > 1) emptyJson.engines_tried = enginesTried;
       emptyResult = JSON.stringify(emptyJson, null, 2);
     } else {
+      const enginesTriedStr = enginesTried.length > 1 ? ` | engines_tried:${enginesTried.join(",")}` : "";
       emptyResult = [
         `## Search Results`,
-        `results:0 | engine:${engine}${queryTruncated ? ` | ${queryTruncated}` : ""}${unresolvedGotoLinks > 0 ? ` | goto_links_unresolved:${unresolvedGotoLinks}` : ""}`,
+        `results:0 | engine:${engine}${enginesTriedStr}${queryTruncated ? ` | ${queryTruncated}` : ""}${unresolvedGotoLinks > 0 ? ` | goto_links_unresolved:${unresolvedGotoLinks}` : ""}`,
         ``,
         `No results found for: "${params.query}"`,
         ``,
@@ -947,11 +1016,15 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
 
   // P1-7: Auto-extract content from top N results when extract_options is provided
   // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
-  // Sentinel strings emitted by novadaExtract to signal a fetch failure.
-  // INVARIANT: do NOT change EXTRACT_FAILED_SENTINEL — src/tools/research.ts:214-215 depends on it.
-  // EXTRACT_ERROR_SENTINEL is the timeout-ceiling path (extract.ts ~1294).
-  const EXTRACT_FAILED_SENTINEL = "## Extract Failed";
-  const EXTRACT_ERROR_SENTINEL  = "## Extraction Error";
+  // Round 6 (review HIGH, class fix): this used to detect a failed extraction by
+  // re-deriving its OWN copy of extract.ts's failure-heading text
+  // (EXTRACT_FAILED_SENTINEL/EXTRACT_ERROR_SENTINEL, independently duplicated from
+  // research.ts's equally-hardcoded copy of the same strings). Both broke silently
+  // the moment toolFailure() started prepending an invisible marker ahead of that
+  // text. novadaExtract is called in-process here, OUTSIDE the one transport choke
+  // point (applyHonestFailureFlag) — this consumer must detect failure via
+  // isToolFailure() itself, the same helper every other in-process consumer uses,
+  // not a parallel text-literal copy.
 
   if (params.extract_options || params.enrich_top) {
     const opts = params.extract_options ?? { top_n: 1, format: "markdown" as const };
@@ -963,27 +1036,24 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
     const extractResults = await Promise.all(
       urlsToExtract.map(async (url) => {
         try {
-          const content = await novadaExtract({
+          const rawContent = await novadaExtract({
             url,
             format: opts.format ?? "markdown",
             render: "auto" as const,
             fields: opts.fields,
             max_chars: opts.max_chars,
           }, apiKey);
+
+          // F6b / C4: a failed extraction must never propagate into extracted_content.
+          // Round 6: isToolFailure() is the ONLY failure signal now — checked BEFORE
+          // any text manipulation, never derived from the message's wording.
+          if (isToolFailure(rawContent)) {
+            const errorText = stripToolFailureMark(rawContent);
+            return { url, content: null, extract_error: errorText.slice(0, 300), ok: false, sentinel: true };
+          }
+          const content = stripToolFailureMark(rawContent);
           // Strip the output-save prefix that novadaExtract prepends (📁 ...)
           const rawText = content.replace(/^📁[^\n]*\n\n/, "");
-
-          // F6b / C4: Detect failure sentinels — treat as a soft failure.
-          // "## Extract Failed" = caught exception path (research.ts depends on this string — do NOT rename).
-          // "## Extraction Error" = TOTAL_REQUEST_CEILING timeout path (extract.ts ~1294).
-          // Neither sentinel must propagate into extracted_content.
-          const trimmed = rawText.trimStart();
-          if (
-            trimmed.startsWith(EXTRACT_FAILED_SENTINEL) ||
-            trimmed.startsWith(EXTRACT_ERROR_SENTINEL)
-          ) {
-            return { url, content: null, extract_error: rawText.slice(0, 300), ok: false, sentinel: true };
-          }
 
           // F6a: When BOTH extract_options.format==="json" AND the outer params.format==="json",
           // JSON.parse the content so extracted_content is a nested object in the JSON output.
@@ -1072,7 +1142,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string, options
   }
 
   // ── JSON output mode ──────────────────────────────────────────────────────
-  const engineLabel = `${engine} (via scraper-api)`;
+  // C1 (#39): disclose which engine ACTUALLY served these results — defaults
+  // to the requested `engine`, but reflects a fallback engine once one served.
+  const engineLabel = `${servedByEngine} (via scraper-api)`;
   // FIX-6: Emit a search_id on every search so novada_search_feedback can reference it
   const searchId = `search-${Date.now()}-${++_searchCounter}`;
 

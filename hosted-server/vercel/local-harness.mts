@@ -39,7 +39,7 @@ try {
   console.warn("[harness] could not load .env.local:", e);
 }
 
-// Mark as Vercel environment so isHostedEnvironment() → true
+// Mark as Vercel environment so RUNTIME.kind === "hosted" (config.ts)
 process.env.VERCEL = "1";
 
 // ── import handler AFTER env is loaded ────────────────────────────────────────

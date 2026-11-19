@@ -1,27 +1,32 @@
 import { resolveBrowserWs } from "../utils/credentials.js";
 import { getSession, storeSession, closeSession, listSessions, sanitizeBrowserError } from "../utils/browser.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, toolFailure } from "../_core/errors.js";
 import { wrapUntrusted } from "../utils/untrusted.js";
-import { isHostedEnvironment } from "../config.js";
+import { isBrowserTransportAvailable } from "../utils/runtime.js";
 /**
  * Fix C (2026-09-21): novada_browser variant of utils/runtime.ts's
  * getBrowserUnavailableError(). The shared template is phrased around a
  * `render=`/`method=` param (`${fieldName}="browser" requires…`, "Use
  * ${fieldName}='render'…") which reads wrong for this tool — novada_browser has
  * no render param, and telling the agent to pass one would trigger a schema
- * reject. Same heading ("## Browser Mode Unavailable" — a member of runtime.ts's
- * EXTRACTION_FAILURE_SENTINELS set) and same machine status token
- * (status:browser_unavailable_on_runtime) so downstream consumers see one
- * consistent shape; only the prose is tool-appropriate.
+ * reject. Same heading ("## Browser Mode Unavailable") and same machine status
+ * token (status:browser_unavailable_on_runtime) so downstream consumers see one
+ * consistent shape; only the prose is tool-appropriate. Both this function and
+ * runtime.ts's getBrowserUnavailableError() wrap their return with toolFailure()
+ * — the structural marker is the failure signal, not the heading text.
  */
 function browserUnavailableOnRuntimeMessage() {
-    return [
+    return toolFailure([
         `## Browser Mode Unavailable`,
         ``,
-        `novada_browser requires a persistent CDP WebSocket transport that this serverless runtime (Vercel/Lambda) cannot provide — the connection was not attempted.`,
+        `novada_browser requires a persistent CDP WebSocket transport that this deployment's current configuration cannot provide — the connection was not attempted.`,
         ``,
         `## Why This Happens`,
-        `- Serverless functions terminate after each request; CDP needs a long-lived WebSocket.`,
+        // Round 5: no longer names "Vercel/Lambda" specifically — RUNTIME.kind alone
+        // can't distinguish EC2 from genuine Vercel (both report "hosted" — see
+        // config.ts), and production runs on EC2 (see repo CLAUDE.md), so a Vercel-
+        // specific claim would be false there.
+        `- This runtime's request-handling model terminates/isolates each request; CDP needs a long-lived WebSocket.`,
         `- Attempting the connection anyway fails with a raw "AuthorizationError: Account or Password verification failed" — a transport failure masquerading as a credentials problem. This guard exists so you never see that misleading error.`,
         ``,
         `## Agent Action`,
@@ -31,7 +36,7 @@ function browserUnavailableOnRuntimeMessage() {
             `For full interactive browser automation, run the MCP server locally: npx -y novada-mcp@latest ` +
             `with NOVADA_BROWSER_WS configured. ` +
             `Docs: https://docs.novada.com/mcp/local-setup`,
-    ].join("\n");
+    ].join("\n"));
 }
 /**
  * Interactive browser automation via Novada Browser API (CDP WebSocket).
@@ -91,23 +96,24 @@ export async function novadaBrowser(params, apiKey) {
     // fail fast with a structured, honest message instead of attempting the
     // doomed connection.
     //
-    // Pure TRANSPORT predicate (review HIGH, 2026-09-21): hosted runtime that has
-    // NOT opted into persistent WS via DEPLOYMENT_SUPPORTS_WS=true. Deliberately
-    // NOT isBrowserAvailableOnRuntime() — that helper conflates transport
+    // Pure TRANSPORT predicate (review HIGH, 2026-09-21; round 5: now the SAME
+    // exported function utils/browser.ts's isBrowserConfigured()/fetchViaBrowser()
+    // use — one gate, not a parallel inline copy). Deliberately NOT
+    // isBrowserAvailableOnRuntime() — that helper conflates transport
     // capability with credential PRESENCE (it checks getBrowserWs(), env/store
     // only), so it fires on an opted-in runtime with no env WS even though
     // resolveBrowserWs(apiKey) below would auto-provision credentials the helper
     // cannot see (that config worked before this guard and must keep working —
     // same reasoning for capable LOCAL runtimes, which never enter this branch).
     // Credential absence stays the job of the richer resolveBrowserWs flow below.
-    if (isHostedEnvironment() && process.env.DEPLOYMENT_SUPPORTS_WS !== "true") {
+    if (!isBrowserTransportAvailable()) {
         return browserUnavailableOnRuntimeMessage();
     }
     // resolveBrowserWs prefers: store.browserWs > NOVADA_BROWSER_WS > auto-fetch via apiKey.
     // Passing apiKey here ensures the caller's account is billed on the hosted server.
     const wsEndpoint = await resolveBrowserWs(apiKey);
     if (!wsEndpoint) {
-        return [
+        return toolFailure([
             `## Browser API — Not Configured`,
             ``,
             `Set the NOVADA_BROWSER_WS environment variable to enable browser automation,`,
@@ -122,7 +128,7 @@ export async function novadaBrowser(params, apiKey) {
             `Get credentials at: https://dashboard.novada.com/overview/browser/`,
             ``,
             `agent_instruction: Set NOVADA_BROWSER_WS or ensure NOVADA_API_KEY has Browser API access (product=10). Auto-provisioning will retry with the caller's key.`,
-        ].join("\n");
+        ].join("\n"));
     }
     // Dynamic import to avoid forcing playwright-core on users who don't need browser
     let chromium;
@@ -131,14 +137,14 @@ export async function novadaBrowser(params, apiKey) {
         chromium = pw.chromium;
     }
     catch {
-        return [
+        return toolFailure([
             `## Browser API — Missing Dependency`,
             ``,
             `playwright-core is required for browser automation but not installed.`,
             `Run: npm install playwright-core`,
             ``,
             `agent_instruction: Run: npm install playwright-core. This is required for browser automation.`,
-        ].join("\n");
+        ].join("\n"));
     }
     const results = [];
     const startTime = Date.now();
