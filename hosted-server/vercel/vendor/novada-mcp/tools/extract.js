@@ -1302,7 +1302,7 @@ const NEXT_TIER_MIN_SLICE_MS = 15_000;
  *  the unchanged outer TOTAL_REQUEST_CEILING race is still the final backstop. */
 const CAPPED_TIER_MIN_TIMEOUT_MS = 10_000;
 /** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
-async function extractSingleInner(params, apiKey) {
+async function extractSingleInner(params, apiKey, tierAttemptLog = []) {
     // #41 Round 2: wall-clock origin for this request, shared by the auto-ladder's
     // budget calculation below (how much of TOTAL_REQUEST_CEILING is already spent)
     // and by its per-tier elapsed-time disclosure in the failure message.
@@ -1777,7 +1777,10 @@ async function extractSingleInner(params, apiKey) {
         ladderPath = ladderPath.filter(t => t !== "browser");
     }
     if (!gitbookPreProbeResolved) {
-        const tierErrors = [];
+        // #1 (2026-11-19): the shared log (see TierAttemptLog doc comment above) —
+        // NOT a fresh local array — so a ceiling abort racing this call still sees
+        // every tier that finished before the abort fired.
+        const tierErrors = tierAttemptLog;
         let ladderSucceeded = false;
         for (let i = 0; i < ladderPath.length; i++) {
             const tier = ladderPath[i];
@@ -2786,6 +2789,18 @@ async function extractSingleInner(params, apiKey) {
     return finalOutput;
 }
 /**
+ * #1 (2026-11-19): headroom subtracted from TIMEOUTS.TOTAL_REQUEST_CEILING for
+ * the INTERNAL abort timer only — the stated "50s ceiling" in the error message
+ * and every ladder tier-budget calculation (extractSingleInner) still use the
+ * full, unchanged TOTAL_REQUEST_CEILING. Live evidence (release-0.9.51
+ * consistency report, zeit.de/apnews.com) measured 50.78s/50.91s wall-clock —
+ * ~0.8-0.9s OVER the advertised 50s — because the abort fired at exactly 50s
+ * with zero room left for toolFailure() formatting + the hosted server's own
+ * response transport. Firing the internal timer 1s early leaves that headroom
+ * so the caller-visible latency stays at or under the advertised ceiling.
+ */
+const CEILING_ABORT_HEADROOM_MS = 1_000;
+/**
  * Per-URL entry point with a hard total-request ceiling (TIMEOUTS.TOTAL_REQUEST_CEILING).
  * Uses Promise.race to guarantee no single URL blocks for more than 45s regardless of
  * how many auto-escalation steps (static → render → browser) are attempted.
@@ -2797,13 +2812,20 @@ async function extractSingle(params, apiKey) {
     if (blocked.test(params.url)) {
         throw new Error('Blocked: private/internal URLs are not allowed. agent_instruction: Use a public URL.');
     }
+    // #1 (2026-11-19): one shared tier-attempt log for this request, passed into
+    // extractSingleInner's ladder loop below. It is the SAME array the "All N
+    // tiers failed" throw already builds from — not a second recording
+    // mechanism — so the ceiling-abort catch block (which can't wait for
+    // extractSingleInner to return once the race is lost) can still report
+    // whichever tiers DID finish before the ceiling fired.
+    const tierAttemptLog = [];
     let ceilingTimer = null;
     const ceiling = new Promise((_, reject) => {
-        ceilingTimer = setTimeout(() => reject(new Error(`TOTAL_REQUEST_CEILING: extractSingle for ${params.url} exceeded ${TIMEOUTS.TOTAL_REQUEST_CEILING}ms`)), TIMEOUTS.TOTAL_REQUEST_CEILING);
+        ceilingTimer = setTimeout(() => reject(new Error(`TOTAL_REQUEST_CEILING: extractSingle for ${params.url} exceeded ${TIMEOUTS.TOTAL_REQUEST_CEILING}ms`)), TIMEOUTS.TOTAL_REQUEST_CEILING - CEILING_ABORT_HEADROOM_MS);
     });
     try {
         const result = await Promise.race([
-            extractSingleInner(params, apiKey),
+            extractSingleInner(params, apiKey, tierAttemptLog),
             ceiling,
         ]);
         return result;
@@ -2814,6 +2836,14 @@ async function extractSingle(params, apiKey) {
             // Return a structured error string in the same format as other extraction errors
             // so callers (batch mode, novadaExtract) get usable output rather than a thrown exception.
             const ceiling_s = TIMEOUTS.TOTAL_REQUEST_CEILING / 1000;
+            // #1 (2026-11-19): same "${tier}: ${cause} (${ms}ms)" join the "All N
+            // tiers failed" throw in extractSingleInner uses — read from the SHARED
+            // log (see TierAttemptLog doc comment), not re-derived or re-recorded.
+            // Empty only when the ceiling fired before even the FIRST tier finished
+            // (said explicitly, rather than silently omitting the line).
+            const tiersLine = tierAttemptLog.length > 0
+                ? `Tiers attempted before abort: ${tierAttemptLog.join("; ")}`
+                : `Tiers attempted before abort: none completed — the ceiling fired mid-way through the first tier.`;
             // Round 7 (review HIGH): tagged "ceiling_timeout" so a telemetry/outcome
             // consumer (hosted-server/vercel/api/mcp.ts) reads getToolFailureReason()
             // instead of re-deriving "was this a timeout?" from the "## Extraction
@@ -2823,6 +2853,7 @@ async function extractSingle(params, apiKey) {
                 `## Extraction Error`,
                 `url: ${params.url}`,
                 `error: Request exceeded the ${ceiling_s}s total ceiling and was aborted.`,
+                tiersLine,
                 ``,
                 `## Agent Action`,
                 `agent_instruction: This URL took too long (>${ceiling_s}s). Try render="static" to skip escalation, or novada_scrape for platform-specific data.`,

@@ -8,6 +8,18 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.52] — 2026-11-19
+
+Follow-ups from the 0.9.51 verification: a ceiling abort now names the tiers it reached and returns within 50s, non-UTF-8 pages decode correctly, and `novada_research` no longer treats a sentence-initial pronoun as a comparison entity.
+
+### Fixed
+- **A `novada_extract` ceiling abort now names every tier it reached before the abort fired**, same as the "all tiers failed" message — `novada_extract` on zeit.de/apnews.com previously hit the 50s total ceiling with a generic "Request exceeded the 50s total ceiling" message that couldn't confirm which tiers (if any) were attempted. The ladder's per-tier attempt log is now a single shared record read by both the normal failure path and the ceiling-abort path, instead of a second mechanism; when the ceiling fires mid-way through the very first tier (nothing has finished yet), the message says so explicitly rather than silently omitting the tier line. The internal abort timer also now fires ~1s before the stated 50s ceiling, leaving headroom for response formatting/transport so the caller-visible latency stays at or under the advertised cap (previously measured 0.8–0.9s over).
+- **Non-UTF-8 pages no longer come back as mojibake**: since 0.9.51's byte-exact fetch (#4), every response was still unconditionally decoded as UTF-8 regardless of its real charset. HTML is now decoded using the `Content-Type` header's `charset=` parameter, else a sniffed `<meta charset>`/`<meta http-equiv="Content-Type" ... charset=...>` tag, else UTF-8 — the same precedence browsers use. Shift_JIS, GBK/GB2312/GB18030, EUC-KR, and windows-1252 pages are all affected; UTF-8 pages (the overwhelming majority) are unchanged. An unrecognized/garbled charset label never fails the fetch — it falls back to the previous UTF-8 decode.
+- **`novada_research` no longer misreads a sentence-initial pronoun as a comparison entity** — a question starting "We compared O2 vs Telekom..." (or German "Wir...") extracted "We"/"Wir" as a spurious 3rd comparand, because capitalization at the start of a sentence satisfied the same check a real brand name does. Fixed via a per-language pronoun/determiner table plus one position-sensitive rule: a pronoun is dropped only when it stands alone or is followed by a lowercase word (the real-pronoun shape); it's kept when it's ALL CAPS (an acronym/brand, e.g. "WIR" the bank, "IT" the department) or followed by another comparand-shaped token (the first word of a real brand, e.g. "Us Weekly", "She Media") — a first pass at this (blanket exclusion) dropped exactly those real brand names, caught in review before release. A dropped pronoun is also excluded from the residual topic text appended to each per-comparand search query, which otherwise still leaked it in (e.g. "Novada We web scraping"), caught in a second review pass. Prior comparand fixtures (O2/Telekom/Deutsche Telekom, AWS vs Azure vs GCP vs Oracle Cloud) are unaffected.
+- **Removed a redundant double-bound on `novada_research`'s first generated query**: query #1 was bounded to the engine's query-length limit once when seeded and again by the pass that already bounds every generated query — `boundQuery()` is idempotent, so the seed-time call did nothing the final pass doesn't already do. No behavior change.
+
+---
+
 ## [0.9.51] — 2026-11-19
 
 `novada_extract` escalation now reaches the browser tier for every blocked site, PDFs parse again, and failures say which tiers were tried. On a 24-site production comparison: 22/24 vs 18/24 for 0.9.50, no regressions.

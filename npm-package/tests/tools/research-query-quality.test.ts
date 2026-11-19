@@ -21,6 +21,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { generateSearchQueries, extractComparands } from "../../src/tools/research.js";
+import { boundQuery } from "../../src/tools/search.js";
 
 // English filler phrases this fix must never append to a non-English-flavored
 // comparison query, or to any query derived from a German question.
@@ -380,6 +381,156 @@ describe("extractComparands — comparand grouping", () => {
   });
 });
 
+// ─── #3 (2026-11-19): sentence-initial pronouns/determiners must never be read
+// as a comparand. "We"/"Wir" are capitalized at the start of a sentence —
+// isComparandToken's `/^[A-Z]/` capitalization check alone would misread them
+// as a brand-like token. Fixed via a table row (COMPARAND_PRONOUN_WORDS_BY_LANG)
+// plus ONE discriminator rule (isPronounActuallyComparand) — not a branch per
+// word, and not a blanket identity exclusion either (Round 2 below). ───────
+describe("extractComparands — sentence-initial pronouns excluded, not misread as a comparand (#3)", () => {
+  it("English 'We compared X vs Y' does not extract 'We' as a 3rd comparand", () => {
+    expect(extractComparands("We compared O2 vs Telekom for business customers")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("German 'Wir haben X vs Y verglichen' does not extract 'Wir' as a comparand", () => {
+    expect(extractComparands("Wir haben O2 vs Telekom für Geschäftskunden verglichen")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("French 'Nous comparons X vs Y' does not extract 'Nous' as a comparand", () => {
+    expect(extractComparands("Nous comparons Orange vs SFR")).toEqual(["Orange", "SFR"]);
+  });
+
+  it("Spanish 'Nosotros comparamos X vs Y' does not extract 'Nosotros' as a comparand", () => {
+    expect(extractComparands("Nosotros comparamos Movistar vs Vodafone")).toEqual(["Movistar", "Vodafone"]);
+  });
+
+  it("another sentence-initial pronoun ('They') is excluded the same way", () => {
+    expect(extractComparands("They prefer Figma vs Sketch for UI design")).toEqual(["Figma", "Sketch"]);
+  });
+
+  // Mirror: the exact 0.9.49 fixtures named in the fix request stay unchanged.
+  it("mirror: 0.9.49 fixture 'O2, Telekom und Deutsche Telekom...' is unaffected by the pronoun exclusion", () => {
+    expect(extractComparands("O2, Telekom und Deutsche Telekom Geschäftskunden Internet Vergleich")).toEqual([
+      "O2", "Telekom", "Deutsche Telekom",
+    ]);
+  });
+
+  it("mirror: 0.9.49 fixture 'AWS vs Azure vs GCP vs Oracle Cloud' is unaffected by the pronoun exclusion", () => {
+    expect(extractComparands("AWS vs Azure vs GCP vs Oracle Cloud pricing")).toEqual([
+      "AWS", "Azure", "GCP", "Oracle",
+    ]);
+  });
+});
+
+// ─── #3 Round 2 (2026-11-19, coordinator review HIGH): the blanket, position-
+// independent pronoun exclusion above dropped the first word of a REAL brand
+// that collides with a pronoun — live-reproduced by the reviewer: "compare Us
+// Weekly vs People magazine" → ["Weekly","People"] (lost "Us"), "vergleiche
+// WIR Bank und UBS" → ["Bank","UBS"] (lost "WIR"), "compare She Media vs Vox
+// Media" → ["Media","Vox Media"] (lost "She"). Fixed with ONE discriminator
+// rule (isPronounActuallyComparand), not a branch per brand: a pronoun/
+// determiner is dropped only when it stands alone or is followed by a
+// lowercase word (reads as the actual pronoun — "We compared...", "Wir
+// vergleichen..."); it is KEPT when it is ALL CAPS at length ≥2 (reads as an
+// acronym/brand regardless of what follows — "WIR" the bank, "IT" the dept)
+// OR the next token is itself a comparand candidate (joins into a 2-word
+// phrase the same way "Deutsche Telekom" already does — "Us"+"Weekly",
+// "She"+"Media"). ────────────────────────────────────────────────────────
+describe("extractComparands — pronoun/brand collision: KEEP the real brand, still DROP the real pronoun (#3 Round 2)", () => {
+  it("'Us Weekly' (a real magazine) is kept whole — 'Us' is followed by a capitalized word, not a lowercase verb", () => {
+    expect(extractComparands("compare Us Weekly vs People magazine")).toEqual(["Us Weekly", "People"]);
+  });
+
+  it("'WIR Bank' (a real Swiss bank, written ALL CAPS) is kept whole", () => {
+    expect(extractComparands("vergleiche WIR Bank und UBS")).toEqual(["WIR Bank", "UBS"]);
+  });
+
+  it("'She Media' (a real media company) is kept whole — same reasoning as 'Us Weekly'", () => {
+    expect(extractComparands("compare She Media vs Vox Media")).toEqual(["She Media", "Vox Media"]);
+  });
+
+  it("an ALL-CAPS pronoun-shaped word standing alone ('IT' the department, not the pronoun 'it') is kept as a brand", () => {
+    expect(extractComparands("compare IT vs HR software")).toEqual(["IT", "HR"]);
+  });
+
+  // Mirror — the original Round 1 fixtures (pronoun followed by a LOWERCASE
+  // verb/connector, the shape the fix actually targets) must still drop it.
+  it("mirror: 'We compared Novada versus Bright Data' still drops 'We' (followed by a lowercase verb)", () => {
+    expect(extractComparands("We compared Novada versus Bright Data pricing")).toEqual(["Novada", "Bright Data"]);
+  });
+
+  it("mirror: 'Wir vergleichen O2 und Telekom' still drops 'Wir' (followed by a lowercase verb)", () => {
+    expect(extractComparands("Wir vergleichen O2 und Telekom")).toEqual(["O2", "Telekom"]);
+  });
+
+  it("mirror: 'Nous comparons Orange et SFR' still drops 'Nous' (followed by a lowercase verb)", () => {
+    expect(extractComparands("Nous comparons Orange et SFR")).toEqual(["Orange", "SFR"]);
+  });
+
+  // Mirror — the 0.9.49 fixtures (no pronoun involved at all) stay unchanged.
+  it("mirror: 0.9.49 fixture 'O2, Telekom und Deutsche Telekom...' still unaffected", () => {
+    expect(extractComparands("O2, Telekom und Deutsche Telekom Geschäftskunden Internet Vergleich")).toEqual([
+      "O2", "Telekom", "Deutsche Telekom",
+    ]);
+  });
+
+  it("mirror: 0.9.49 fixture 'AWS vs Azure vs GCP vs Oracle Cloud' still unaffected", () => {
+    expect(extractComparands("AWS vs Azure vs GCP vs Oracle Cloud pricing")).toEqual([
+      "AWS", "Azure", "GCP", "Oracle",
+    ]);
+  });
+});
+
+// ─── #3 Round 3 (2026-11-19, verifier check 4): a DROPPED pronoun correctly
+// excluded from the COMPARAND list still leaked into the RESIDUAL topic text
+// appended to every per-comparand query — "We compared Novada versus Bright
+// Data for web scraping" produced the sub-query "Novada We web scraping".
+// Fixed in the same place extractComparands decides a pronoun is dropped
+// (extractComparandsDetailed records it; buildComparisonTopicResidual
+// excludes it too) — no new table, no second mechanism. ────────────────────
+describe("generateSearchQueries — a dropped pronoun must not leak into the residual topic text (#3 Round 3)", () => {
+  it("the exact verifier repro: no DERIVED (non-verbatim) query contains 'We' as its own word", () => {
+    const question = "We compared Novada versus Bright Data for web scraping";
+    const queries = generateSearchQueries(question, false, false);
+    // queries[0] is the original question verbatim (by design, #4) — it
+    // legitimately contains "We", same as the user's own text. Every OTHER
+    // (derived) query must not.
+    expect(queries[0]).toBe(question);
+    for (const q of queries.slice(1)) {
+      expect(q).not.toMatch(/\bWe\b/);
+    }
+    // And the per-comparand query is the clean shape, not "Novada We web scraping".
+    expect(queries).toContain("Novada web scraping");
+    expect(queries).toContain("Bright Data web scraping");
+  });
+
+  it("brand case 'Us Weekly': 'Us' stays IN the comparand (not dropped) and the per-comparand query is clean", () => {
+    const queries = generateSearchQueries("compare Us Weekly vs People magazine circulation numbers", false, false);
+    expect(queries).toContain("Us Weekly magazine circulation numbers");
+    expect(queries).toContain("People magazine circulation numbers");
+  });
+
+  it("brand case 'WIR Bank': 'WIR' stays IN the comparand and the per-comparand query is clean", () => {
+    const queries = generateSearchQueries("vergleiche WIR Bank und UBS Gebühren", false, false);
+    expect(queries).toContain("WIR Bank vs UBS Gebühren");
+  });
+
+  it("brand case 'She Media': 'She' stays IN the comparand and the per-comparand query is clean", () => {
+    const queries = generateSearchQueries("compare She Media vs Vox Media audience reach", false, false);
+    expect(queries).toContain("She Media audience reach");
+    expect(queries).toContain("Vox Media audience reach");
+  });
+
+  it("mirror: German 'Wir vergleichen O2 und Telekom' — residual has no leaked 'Wir' (verbatim query #0 excepted)", () => {
+    const question = "Wir vergleichen O2 und Telekom Geschäftskunden Mobilfunk Tarife";
+    const queries = generateSearchQueries(question, false, false);
+    expect(queries[0]).toBe(question);
+    for (const q of queries.slice(1)) {
+      expect(q).not.toMatch(/\bWir\b/);
+    }
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 // Hard-coded-year regression: years must come from new Date(), never 2024/2025.
 // ──────────────────────────────────────────────────────────────────────────
@@ -539,6 +690,23 @@ describe("generateSearchQueries — C5: query #1 is bounded, never the raw long 
     const short = "What is zero trust networking";
     const queries = generateSearchQueries(short, false, false);
     expect(queries[0]).toBe(short);
+  });
+
+  // #4 (2026-11-19): query #1 used to be bounded TWICE — once when seeded
+  // (`boundQuery(safeQuestion).query`) and again by the final
+  // `queries.map(q => boundQuery(q).query)` pass every query already goes
+  // through. boundQuery() is idempotent (a ≤500-char string re-bounds to
+  // itself), so removing the seed-time call changes nothing observable —
+  // this test pins that exact invariant so a future change can't quietly
+  // reintroduce a behavior difference between "bounded once" and "bounded
+  // twice".
+  it("#4: query #1 for an over-long question is identical whether boundQuery ran once (now) or twice (pre-#4) — idempotent, no redundant call needed", () => {
+    const over500 = "a".repeat(600) + " enterprise vendor evaluation criteria";
+    const queries = generateSearchQueries(over500, false, false);
+    const singlyBounded = boundQuery(over500).query;
+    const doublyBounded = boundQuery(singlyBounded).query; // what the OLD seed-then-map code path produced
+    expect(singlyBounded).toBe(doublyBounded); // idempotence, proven directly
+    expect(queries[0]).toBe(doublyBounded); // and generateSearchQueries' actual output matches either way
   });
 });
 

@@ -93,6 +93,123 @@ const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
 /**
+ * #2 (2026-11-19, follow-up to #4): #4 made the fetch byte-exact but the DECODE
+ * was still hardcoded `buf.toString("utf-8")` — correct for the overwhelming
+ * majority of pages, but it mojibakes any page served in a legacy charset
+ * (Shift_JIS/EUC-JP Japanese sites, GBK/GB2312/GB18030 Chinese sites,
+ * windows-1252 Western European sites that omit/lie about their charset in a
+ * way old browsers tolerated). Same precedence every browser uses: (1) the
+ * `Content-Type` header's own `charset=` param, (2) a sniffed `<meta charset>`
+ * or `<meta http-equiv="Content-Type" content="...charset=...">` tag, (3) UTF-8
+ * default — unchanged behavior for the common case where none of the above
+ * disagree with UTF-8.
+ */
+const META_CHARSET_SNIFF_BYTES = 1024;
+const META_CHARSET_RE = /<meta[^>]+charset\s*=\s*["']?\s*([a-z0-9_-]+)/i;
+const META_HTTP_EQUIV_CHARSET_RE = /<meta[^>]+http-equiv\s*=\s*["']?content-type["']?[^>]*content\s*=\s*["'][^"']*charset=([a-z0-9_-]+)/i;
+
+/**
+ * Resolve the charset to decode with, from (1) Content-Type header, else
+ * (2) a `<meta charset>`/`<meta http-equiv>` tag sniffed from the raw bytes,
+ * else (3) "utf-8". The sniff decodes only the first `META_CHARSET_SNIFF_BYTES`
+ * bytes as latin1 (1 byte → 1 code unit, so it can never corrupt the tag
+ * itself) — safe because `<meta charset=...>` is pure ASCII syntax in every
+ * encoding this function is ever asked to detect (Shift_JIS, GBK/GB18030,
+ * EUC-KR, windows-1252 are all ASCII-compatible in their single-byte range).
+ */
+export function detectCharset(buf: Buffer, contentType: string): string {
+  const headerMatch = /charset=([a-z0-9_-]+)/i.exec(contentType);
+  if (headerMatch) return headerMatch[1].toLowerCase();
+  const head = buf.subarray(0, META_CHARSET_SNIFF_BYTES).toString("latin1");
+  const metaMatch = META_CHARSET_RE.exec(head) ?? META_HTTP_EQUIV_CHARSET_RE.exec(head);
+  if (metaMatch) return metaMatch[1].toLowerCase();
+  return "utf-8";
+}
+
+/**
+ * #2 Round 2 (2026-11-20, CI failure on Node 20, PR #61): Node's `TextDecoder`
+ * is ICU-backed and correct for windows-1252 on Node 22.23.5+/24 — but on
+ * Node 20.20.2 (the floor this package's `engines.node` actually claims)
+ * `new TextDecoder("windows-1252")` silently falls back to a plain byte-is-
+ * codepoint mapping for 0x80-0x9F instead of windows-1252's real remapping
+ * (confirmed: byte 0x80 decodes to U+0080 on Node 20.20.2, not € U+20AC).
+ * The docstring above previously claimed TextDecoder "supports every label
+ * on Node 20+" — that was wrong for this one encoding family; corrected here.
+ *
+ * Every WHATWG label that the Encoding Standard's own alias table points at
+ * "windows-1252" is affected — including, confusingly, "iso-8859-1"/"latin1"
+ * themselves: the spec deliberately treats those labels as windows-1252 for
+ * web-compat (NOT the real ISO/IEC 8859-1 table), so a page honestly
+ * labelled iso-8859-1 is supposed to get windows-1252's €, not a C1 control
+ * code point at 0x80. Fixed by decoding this one family ourselves — a
+ * 32-entry table for the only range where windows-1252 differs from a plain
+ * byte-as-codepoint mapping — instead of trusting TextDecoder for it. Every
+ * OTHER charset (shift_jis, gbk, euc-kr, big5, ...) is unaffected and still
+ * goes through TextDecoder exactly as before.
+ */
+const WINDOWS_1252_LABELS = new Set([
+  "ansi_x3.4-1968", "ascii", "cp1252", "cp819", "csisolatin1", "ibm819",
+  "iso-8859-1", "iso-ir-100", "iso8859-1", "iso88591", "iso_8859-1",
+  "iso_8859-1:1987", "l1", "latin1", "us-ascii", "windows-1252", "x-cp1252",
+]);
+
+/**
+ * windows-1252's remapping table for bytes 0x80-0x9F (WHATWG Encoding
+ * Standard, "windows-1252" index — https://encoding.spec.whatwg.org/#legacy-single-byte-encodings).
+ * Every byte below 0x80 and at/above 0xA0 decodes to its own value as a code
+ * point (plain Latin-1 identity) — the ONLY range covered by this table is
+ * where windows-1252 differs from that identity mapping. Index 0 = byte
+ * 0x80. Five entries (0x81, 0x8D, 0x8F, 0x90, 0x9D) are the spec's
+ * intentionally-undefined indexes; real content essentially never contains
+ * these bytes, but the decoder must still be total, so — exactly as the
+ * spec's own decoder algorithm does for an undefined index — they fall back
+ * to the C1 control code point at that same byte value.
+ */
+const WINDOWS_1252_0x80_TO_0x9F: readonly number[] = [
+  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021,
+  0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f,
+  0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
+];
+
+/** Decode a buffer as windows-1252 ourselves (see WINDOWS_1252_LABELS'
+ *  doc comment for why TextDecoder can't be trusted for this one family on
+ *  every supported Node runtime). Every code point here fits in one UTF-16
+ *  code unit (no surrogate pairs), so a plain `String.fromCharCode` per byte
+ *  is correct, not just an approximation. */
+export function decodeWindows1252(buf: Buffer): string {
+  const chars = new Array<string>(buf.length);
+  for (let i = 0; i < buf.length; i++) {
+    const byte = buf[i];
+    const code = byte >= 0x80 && byte <= 0x9f ? WINDOWS_1252_0x80_TO_0x9F[byte - 0x80] : byte;
+    chars[i] = String.fromCharCode(code);
+  }
+  return chars.join("");
+}
+
+/**
+ * Decode raw response bytes using the detected charset. windows-1252 and
+ * every label that aliases to it (WINDOWS_1252_LABELS above) are decoded by
+ * decodeWindows1252, not TextDecoder — see its doc comment. Every other
+ * legacy label this function can encounter in practice (shift_jis,
+ * gbk/gb18030/gb2312, euc-kr, big5, etc.) goes through Node's `TextDecoder`
+ * (ICU-backed; correct for these on every officially-supported Node version
+ * this package targets). An unrecognized/garbled label (a lying
+ * Content-Type) throws RangeError — caught here and never allowed to fail
+ * the fetch; falls back to the prior, always-safe utf-8 decode instead.
+ */
+export function decodeHtmlBuffer(buf: Buffer, contentType: string): string {
+  const charset = detectCharset(buf, contentType);
+  if (charset === "utf-8" || charset === "utf8") return buf.toString("utf-8");
+  if (WINDOWS_1252_LABELS.has(charset)) return decodeWindows1252(buf);
+  try {
+    return new TextDecoder(charset).decode(buf);
+  } catch {
+    return buf.toString("utf-8");
+  }
+}
+
+/**
  * #4 (2026-11-19): axios's default responseType ('json', falling back to its own
  * string decode on parse failure) reads the socket as text — for a real PDF
  * (irs.gov/pub/irs-pdf/f1040.pdf, a SEC 10-K PDF) this silently drops ~3% of the
@@ -105,8 +222,8 @@ const RETRY_BASE_DELAY_MS = 1000;
  * byte) and decode HERE, once, immediately after the response headers are known —
  * PDF responses (by Content-Type OR a `.pdf` URL, the same two-signal check
  * extract.ts already uses via isPdfResponse) keep the raw Buffer; everything else
- * is decoded to a utf-8 string, matching axios's own previous default decode so
- * every existing non-PDF caller sees the identical shape it always has.
+ * is decoded via decodeHtmlBuffer (#2 above) using the page's actual charset
+ * instead of an unconditional UTF-8 decode.
  */
 function normalizeResponseBody<T>(resp: AxiosResponse<T>, url: string): AxiosResponse {
   const data = resp.data as unknown;
@@ -121,7 +238,7 @@ function normalizeResponseBody<T>(resp: AxiosResponse<T>, url: string): AxiosRes
   if (!isRawBytes) return resp as AxiosResponse;
   const buf = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
   const contentType = String((resp.headers as Record<string, string>)?.["content-type"] ?? "");
-  (resp as AxiosResponse).data = isPdfResponse(url, contentType) ? buf : buf.toString("utf-8");
+  (resp as AxiosResponse).data = isPdfResponse(url, contentType) ? buf : decodeHtmlBuffer(buf, contentType);
   return resp as AxiosResponse;
 }
 
