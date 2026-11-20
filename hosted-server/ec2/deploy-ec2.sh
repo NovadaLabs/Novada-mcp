@@ -3,6 +3,11 @@
 # Usage: deploy-ec2.sh [ssh-host]   (default: novada-mcp from ~/.ssh/config)
 set -euo pipefail
 HOST="${1:-novada-mcp}"
+# Health gate path. Default /health/ready exercises KV, so a deploy is refused while KV is down.
+# Emergency code-only fix during a KV outage: NOVADA_MCP_HEALTH_PATH=/health (static liveness only).
+HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
+case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
+[ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
 ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
 DIRTY="$(git -C "$ROOT" status --porcelain -- hosted-server/vercel | grep -q . && echo -dirty || true)"
@@ -14,12 +19,7 @@ trap 'rm -f "$TAR"' EXIT
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -C "$SRC" --exclude node_modules --exclude dist --exclude .vercel --exclude '.env*' -czf "$TAR" .
 scp -q "$TAR" "$HOST:/tmp/novada-mcp-$REL.tgz"
 
-# Health gate path. Default /health/ready exercises KV, so a deploy is refused while KV is down.
-# Emergency code-only fix during a KV outage: NOVADA_MCP_HEALTH_PATH=/health (static liveness only).
-HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
-case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
-[ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
-ssh "$HOST" REL="$REL" bash -s <<'REMOTE'
+ssh "$HOST" REL="$REL" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
 set -euo pipefail
 # NOVADA_MCP_ROOT: test-only override (mirrors NOVADA_SKIP_HOSTED_FORCE's
 # convention in hosted-server/vercel/server.mts) -- defaults to the real

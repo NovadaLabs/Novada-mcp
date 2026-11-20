@@ -20,13 +20,13 @@
 # Usage: restart-rolling.sh [ssh-host]   (default: novada-mcp from ~/.ssh/config)
 set -euo pipefail
 HOST="${1:-novada-mcp}"
-
 # Health gate path. Default /health/ready exercises KV, so a deploy is refused while KV is down.
 # Emergency code-only fix during a KV outage: NOVADA_MCP_HEALTH_PATH=/health (static liveness only).
 HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
 case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
 [ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
-ssh "$HOST" bash -s <<'REMOTE'
+
+ssh "$HOST" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
 set -euo pipefail
 exec 9>/tmp/novada-mcp-deploy.lock
 flock -n 9 || { echo "REFUSED: a deploy or rolling restart is already in progress" >&2; exit 1; }
