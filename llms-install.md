@@ -10,7 +10,7 @@ Novada MCP gives the agent live web data: search, page extraction, multi-source 
 
 Ask the user for their Novada API key.
 
-- If they don't have one: they can sign up at https://www.novada.com (no credit card required; new accounts get free credits) and copy the key from the dashboard.
+- If they don't have one: they can sign up at https://www.novada.com/?cline (no credit card required; new accounts get free credits) and copy the key from the dashboard.
 - Never put the key in a URL. The hosted endpoint only accepts it in an `Authorization: Bearer` header.
 
 ## Step 2 — Choose an install method
