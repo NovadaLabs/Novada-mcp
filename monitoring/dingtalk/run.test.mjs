@@ -275,6 +275,7 @@ test("runAlertMode: sends exactly one alert message on the 1st CONFIRMED failure
   // mocked fetch via globalThis.fetch override, scoped to this test only.
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (opts?.method === "GET" || !opts) {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
@@ -317,6 +318,7 @@ test("runAlertMode: sends exactly one alert message on the 1st CONFIRMED failure
 function fetchFnWithControllableInitialize(failUntilCall) {
   const calls = { initialize: 0 };
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
@@ -479,6 +481,7 @@ test("runAlertMode: WITHOUT NOVADA_TEST_KEY, auth-requiring free checks report '
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
@@ -523,6 +526,7 @@ test("runAlertMode: a misconfigured notice for the same check is sent exactly ON
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
@@ -554,6 +558,7 @@ test("runDailyMode: sends exactly one markdown report covering all check ids", a
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
@@ -574,4 +579,71 @@ test("runDailyMode: sends exactly one markdown report covering all check ids", a
   for (const row of CHECK_TABLE) {
     assert.ok(sent[0].text.includes(row.labelZh), `daily report missing a row for "${row.id}" (labelZh: ${row.labelZh})`);
   }
+});
+
+// ── oauth_register probe → DingTalk alert path, against REAL local HTTP servers ──
+// (2026-11-20 KV outage proof: a /register that 500s must produce an alert
+// through the existing runAlertMode → sendDingTalk path; a 201 must stay silent.)
+
+import { createServer } from "node:http";
+import { sendDingTalk } from "./send.mjs";
+
+async function listen(handler) {
+  const srv = createServer(handler);
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  return { srv, url: `http://127.0.0.1:${srv.address().port}` };
+}
+
+function mcpStub(registerStatus) {
+  return (req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const send = (status, body, headers = {}) => { res.writeHead(status, { "content-type": "application/json", ...headers }); res.end(JSON.stringify(body)); };
+      if (req.method === "GET") return send(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
+      if (req.url === "/register") return registerStatus === 201 ? send(201, { client_id: "probe-client" }) : send(registerStatus, { error: "INTERNAL_ERROR" });
+      if (!req.headers.authorization) return send(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      if (body.method === "initialize") return send(200, { result: { serverInfo: { version: "0.0.0" } } });
+      if (body.method === "tools/list") return send(200, { result: { tools: [] } });
+      return send(200, { result: { content: [{ type: "text", text: "ok" }] } });
+    });
+  };
+}
+
+async function runAgainst(registerStatus) {
+  const mcp = await listen(mcpStub(registerStatus));
+  const posted = [];
+  const hook = await listen((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => { posted.push(JSON.parse(Buffer.concat(chunks).toString())); res.writeHead(200); res.end('{"errcode":0}'); });
+  });
+  try {
+    const exit = await runAlertMode({
+      ctx: { mcpUrl: `${mcp.url}/mcp`, apiKey: "k" },
+      dryRun: false,
+      webhookUrl: hook.url,
+      keyword: "MCP",
+      io: { send: sendDingTalk, load: () => ({}), save: () => {}, rateLimiter: { acquire: async () => {} }, sleep: async () => {} },
+      now: 1000,
+    });
+    return { exit, posted };
+  } finally {
+    mcp.srv.close();
+    hook.srv.close();
+  }
+}
+
+test("oauth_register: target whose /register returns 500 -> DingTalk alert naming oauth_register is POSTed", async () => {
+  const { exit, posted } = await runAgainst(500);
+  assert.equal(exit, 0, "exit code reflects the SEND pipeline (existing design), not the outage");
+  assert.equal(posted.length, 1, "exactly one alert");
+  assert.match(JSON.stringify(posted[0]), /OAuth 注册端点检查/);
+});
+
+test("oauth_register: target whose /register returns 201 -> zero alerts", async () => {
+  const { exit, posted } = await runAgainst(201);
+  assert.equal(exit, 0);
+  assert.equal(posted.length, 0);
 });

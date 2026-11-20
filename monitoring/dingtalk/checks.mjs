@@ -299,6 +299,54 @@ export async function probeOAuthDiscovery(ctx) {
   return ok(latencyMs, "both discovery documents present with required fields");
 }
 
+/**
+ * OAuth WRITE-path probe (2026-11-20 KV outage): discovery is a pure function
+ * and stayed 200 for six days while POST /register 500'd on a dead KV, so
+ * oauth_discovery alone could not see it. Registering a dummy public client
+ * exercises the real storage path (rate-limit incr + kvSet) with one request.
+ * Any non-2xx (incl. the structured 503 KV-unavailable) is a failure. The
+ * dummy client expires on its own (180-day KV TTL) — at 4 runs/day that is
+ * a bounded ~1k tiny keys.
+ */
+export async function probeOAuthRegister(ctx) {
+  const base = new URL(ctx.mcpUrl);
+  const origin = `${base.protocol}//${base.host}`;
+  const startedAt = Date.now();
+  const timeoutMs = ctx.timeoutMs || DEFAULT_TIMEOUT_MS;
+  try {
+    const res = await (ctx.fetchFn || fetch)(`${origin}/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "novada-health-probe",
+        redirect_uris: ["http://localhost:8976/health-probe-callback"],
+        token_endpoint_auth_method: "none",
+      }),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined,
+    });
+    const latencyMs = Date.now() - startedAt;
+    const text = await res.text();
+    if (res.status < 200 || res.status >= 300) {
+      return fail(latencyMs, "http", null, `POST /register: HTTP ${res.status} (expected 2xx) ${text.slice(0, 120)}`);
+    }
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return fail(latencyMs, "shape", null, "POST /register: non-JSON body");
+    }
+    if (!json || typeof json.client_id !== "string" || json.client_id.length === 0) {
+      return fail(latencyMs, "shape", null, "POST /register: 2xx but no client_id in body");
+    }
+    return ok(latencyMs, `registered dummy client (HTTP ${res.status})`);
+  } catch (err) {
+    const latencyMs = Date.now() - startedAt;
+    const timedOut = isTimeoutError(err);
+    const msg = timedOut ? `timeout after ${timeoutMs}ms` : String(err?.message || err);
+    return fail(latencyMs, timedOut ? "timeout" : "network", null, `POST /register: ${msg}`);
+  }
+}
+
 export async function probeUnauthenticated401(ctx) {
   // /mcp is POST-only for JSON-RPC in normal use, but the hosted gateway's
   // auth gate runs before method dispatch — a bare unauthenticated POST
@@ -445,6 +493,7 @@ export const CHECK_TABLE = [
   { id: "initialize", label: "initialize (serverInfo.version)", labelZh: "初始化检查（serverInfo.version）", probe: probeInitialize, cost: "free", severity: "P0", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "tools_list", label: "tools/list (count vs golden baseline)", labelZh: "工具列表检查（对比基线数量）", probe: probeToolsList, cost: "free", severity: "P0", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "oauth_discovery", label: "OAuth discovery (.well-known/*)", labelZh: "OAuth 发现端点检查", probe: probeOAuthDiscovery, cost: "free", severity: "P0", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
+  { id: "oauth_register", label: "OAuth register (POST /register, storage path)", labelZh: "OAuth 注册端点检查（POST /register，存储链路）", probe: probeOAuthRegister, cost: "free", severity: "P0", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "unauthenticated_401", label: "unauthenticated /mcp -> 401 (sign-in entry)", labelZh: "未授权访问检查（登录入口可达性）", probe: probeUnauthenticated401, cost: "free", severity: "P0", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "novada_setup", label: "novada_setup (free tool dispatch)", labelZh: "novada_setup 免费工具调用检查", probe: probeNovadaSetup, cost: "free", severity: "P1", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "novada_search", label: "novada_search", labelZh: "novada_search 工具检查", probe: probeNovadaSearch, cost: "billable", severity: "P1", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: BILLABLE_CHECK_TIMEOUT_MS, slowThresholdMs: BILLABLE_SLOW_THRESHOLD_MS },
