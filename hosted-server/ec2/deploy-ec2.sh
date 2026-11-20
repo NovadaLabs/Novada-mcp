@@ -14,6 +14,11 @@ trap 'rm -f "$TAR"' EXIT
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -C "$SRC" --exclude node_modules --exclude dist --exclude .vercel --exclude '.env*' -czf "$TAR" .
 scp -q "$TAR" "$HOST:/tmp/novada-mcp-$REL.tgz"
 
+# Health gate path. Default /health/ready exercises KV, so a deploy is refused while KV is down.
+# Emergency code-only fix during a KV outage: NOVADA_MCP_HEALTH_PATH=/health (static liveness only).
+HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
+case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
+[ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
 ssh "$HOST" REL="$REL" bash -s <<'REMOTE'
 set -euo pipefail
 # NOVADA_MCP_ROOT: test-only override (mirrors NOVADA_SKIP_HOSTED_FORCE's
@@ -75,7 +80,7 @@ cd /
 # rejected.
 INSTANCE_PORTS="3000 3001"
 
-health_once() { curl -fsS -m 3 "http://127.0.0.1:$1/health/ready" >/dev/null 2>&1; }
+health_once() { curl -fsS -m 3 "http://127.0.0.1:$1${NOVADA_MCP_HEALTH_PATH:-/health/ready}" >/dev/null 2>&1; }
 # NOVADA_MCP_HEALTH_POLL_S: test-only override of the health-poll duration
 # (default unchanged at 30, matching the production 30s health-poll window
 # documented throughout this file). test/deploy-rollback-c2.sh shortens this

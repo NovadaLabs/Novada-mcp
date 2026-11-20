@@ -2272,8 +2272,9 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
         headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
     } catch (err) {
+      console.error(JSON.stringify({ evt: "health_ready_kv_failed", error: (err instanceof Error ? err.message : String(err)).slice(0, 200) }));
       return new Response(
-        JSON.stringify({ ok: false, kv: "error", error: (err instanceof Error ? err.message : String(err)).slice(0, 200) }),
+        JSON.stringify({ ok: false, kv: "error", error: "KV readiness check failed — see server log (evt=health_ready_kv_failed)" }),
         { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store" } },
       );
     }

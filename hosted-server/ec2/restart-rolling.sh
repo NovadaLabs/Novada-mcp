@@ -21,6 +21,11 @@
 set -euo pipefail
 HOST="${1:-novada-mcp}"
 
+# Health gate path. Default /health/ready exercises KV, so a deploy is refused while KV is down.
+# Emergency code-only fix during a KV outage: NOVADA_MCP_HEALTH_PATH=/health (static liveness only).
+HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
+case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
+[ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
 ssh "$HOST" bash -s <<'REMOTE'
 set -euo pipefail
 exec 9>/tmp/novada-mcp-deploy.lock
@@ -31,7 +36,7 @@ INSTANCE_PORTS="3000 3001"
 health() {
   local port="$1"
   for _ in $(seq 1 30); do
-    curl -fsS -m 3 "http://127.0.0.1:${port}/health/ready" >/dev/null 2>&1 && return 0
+    curl -fsS -m 3 "http://127.0.0.1:${port}${NOVADA_MCP_HEALTH_PATH:-/health/ready}" >/dev/null 2>&1 && return 0
     sleep 1
   done
   return 1
