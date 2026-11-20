@@ -136,7 +136,7 @@ import {
   ErrorCode,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
-import { kv, kvConfigured } from "./_kv.js";
+import { kv, kvConfigured, kvReadinessCheck } from "./_kv.js";
 // OAuth 2.1 Authorization Server (RFC 8414/9728/7591/6749/7636) — _oauth.ts is
 // import-free by design (unit-tested side-effect-free in test/oauth.test.mjs);
 // mcp.ts is the ONLY place that wires its real dependencies (Vercel KV,
@@ -2253,6 +2253,30 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
     return new Response(JSON.stringify({ ok: true, service: "novada-mcp-hosted", endpoint: "/mcp" }), {
       headers: { "content-type": "application/json" },
     });
+  }
+
+  // KV-aware readiness gate for the ec2 deploy / rolling-restart scripts.
+  // /health stays static (public monitors depend on it). This one does a real
+  // KV round-trip, so it is DIRECT-LOOPBACK ONLY: nginx (the only public
+  // ingress, same host) always sets X-Real-IP / X-Forwarded-For on proxied
+  // requests, so any request carrying a proxy header came from the internet
+  // and gets a plain 404 (no KV work, endpoint not advertised). A local
+  // `curl http://127.0.0.1:300x/health/ready` has none of those headers.
+  if (pathname === "/health/ready") {
+    const proxied = ["x-forwarded-for", "x-real-ip", "x-vercel-forwarded-for", "forwarded"]
+      .some((h) => request.headers.get(h) !== null);
+    if (proxied) return new Response("Not found", { status: 404 });
+    try {
+      const backend = await kvReadinessCheck();
+      return new Response(JSON.stringify({ ok: true, kv: backend }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    } catch (err) {
+      return new Response(
+        JSON.stringify({ ok: false, kv: "error", error: (err instanceof Error ? err.message : String(err)).slice(0, 200) }),
+        { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store" } },
+      );
+    }
   }
 
   // Public "well-known static text" domain-verification routes (see

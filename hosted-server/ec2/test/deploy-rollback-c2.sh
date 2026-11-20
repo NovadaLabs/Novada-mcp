@@ -200,7 +200,7 @@ esac
 EOF
 
 # fake curl: only understands the one form deploy-ec2.sh issues
-# (-fsS -m 3 http://127.0.0.1:<port>/health). Health is modeled on the
+# (-fsS -m 3 http://127.0.0.1:<port>/health/ready). Health is modeled on the
 # (port, actually-running-release) PAIR — via the same pid/cwd side-channel
 # the fake systemctl writes, not a bare port-keyed flag — so the SAME port
 # can legitimately be healthy on PREV and unhealthy on NEWREL (what makes a
@@ -215,7 +215,7 @@ url=""
 for a in "$@"; do
   case "$a" in http://*) url="$a" ;; esac
 done
-port="$(echo "$url" | sed -E 's#^http://127\.0\.0\.1:([0-9]+)/health$#\1#')"
+port="$(echo "$url" | sed -E 's#^http://127\.0\.0\.1:([0-9]+)/health/ready$#\1#')"
 pidfile="$STATE/port-${port}.pid"
 if [ -f "$pidfile" ]; then
   pid="$(cat "$pidfile")"

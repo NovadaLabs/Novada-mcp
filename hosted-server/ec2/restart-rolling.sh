@@ -31,7 +31,7 @@ INSTANCE_PORTS="3000 3001"
 health() {
   local port="$1"
   for _ in $(seq 1 30); do
-    curl -fsS -m 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1 && return 0
+    curl -fsS -m 3 "http://127.0.0.1:${port}/health/ready" >/dev/null 2>&1 && return 0
     sleep 1
   done
   return 1

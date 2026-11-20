@@ -75,7 +75,7 @@ cd /
 # rejected.
 INSTANCE_PORTS="3000 3001"
 
-health_once() { curl -fsS -m 3 "http://127.0.0.1:$1/health" >/dev/null 2>&1; }
+health_once() { curl -fsS -m 3 "http://127.0.0.1:$1/health/ready" >/dev/null 2>&1; }
 # NOVADA_MCP_HEALTH_POLL_S: test-only override of the health-poll duration
 # (default unchanged at 30, matching the production 30s health-poll window
 # documented throughout this file). test/deploy-rollback-c2.sh shortens this
