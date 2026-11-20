@@ -136,7 +136,7 @@ import {
   ErrorCode,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
-import { kv } from "@vercel/kv";
+import { kv, kvConfigured } from "./_kv.js";
 // OAuth 2.1 Authorization Server (RFC 8414/9728/7591/6749/7636) — _oauth.ts is
 // import-free by design (unit-tested side-effect-free in test/oauth.test.mjs);
 // mcp.ts is the ONLY place that wires its real dependencies (Vercel KV,
@@ -145,6 +145,7 @@ import {
   isOAuthPath,
   handleOAuthRequest,
   resolveAccessTokenRecord,
+  KvUnavailableError,
   lookupClientRedirectUris,
   deriveIssuer,
 } from "./_oauth.js";
@@ -2298,10 +2299,12 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   // KV connection check — must be explicit. Vercel auto-injects KV_REST_API_URL +
   // KV_REST_API_TOKEN when a KV store is connected to the project. If they're
   // missing, fail loud rather than silently bypassing rate-limit + quota.
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+  // REDIS_URL (local redis, EC2) is accepted as an alternative to the Upstash
+  // REST pair — see api/_kv.ts.
+  if (!kvConfigured()) {
     return jsonError(500, "KV_NOT_CONFIGURED",
-      "Vercel KV store is not connected to this project. KV_REST_API_URL and KV_REST_API_TOKEN are required.",
-      "Operator: create a KV store in the Vercel dashboard (Storage → Create → KV), connect it to this project, then redeploy.");
+      "No KV backend is configured. Set REDIS_URL (local redis) or both KV_REST_API_URL and KV_REST_API_TOKEN (Upstash/Vercel KV).",
+      "Operator: set REDIS_URL in /etc/novada-mcp/env (EC2) — or connect a Vercel KV store (Storage → Create → KV) — then restart via hosted-server/ec2/restart-rolling.sh.");
   }
 
   // CORS preflight (some MCP clients probe with OPTIONS). Preflight carries no
@@ -2383,7 +2386,19 @@ async function fetchHandler(request: Request, nodeCtx?: NodeCtx): Promise<Respon
   let surface: HostedSurface = "default";
   if (token.startsWith("nvo_at_")) {
     const oauthDeps = buildOAuthDeps(env);
-    const record = await resolveAccessTokenRecord(token, oauthDeps);
+    let record;
+    try {
+      record = await resolveAccessTokenRecord(token, oauthDeps);
+    } catch (err) {
+      if (!(err instanceof KvUnavailableError)) throw err;
+      // KV ERROR (not a miss): 503 + Retry-After, NOT 401 — a 401 makes OAuth
+      // clients discard still-valid tokens and force a full re-authorization.
+      console.error(JSON.stringify({ evt: "oauth_at_kv_unavailable", error: String(err.cause instanceof Error ? err.cause.message : err.message).slice(0, 200) }));
+      return jsonError(503, "KV_UNAVAILABLE",
+        "Token storage is temporarily unavailable, so this OAuth access token could not be checked.",
+        "Retry the same request in a few seconds. Do NOT discard or refresh the token — it has not been rejected. Alternatively use a raw Novada API key as the Bearer token.",
+        { "retry-after": "5" });
+    }
     if (!record) {
       await emitGuardRejection({ requestId, token, outcome: "INVALID_TOKEN", rejectionStage: "pre_auth", authMethod, userAgent });
       return jsonError(401, "INVALID_TOKEN",
