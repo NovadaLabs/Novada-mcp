@@ -33,7 +33,8 @@ trap 'rm -f "$TGZ"; if [ ! -f "$R/RELEASE" ]; then sudo rm -rf "$R"; echo "BUILD
 sudo -u novada mkdir -p "$R"
 sudo -u novada tar -C "$R" -xzf "$TGZ"
 cd "$R"
-sudo -u novada env HOME=/var/lib/novada npm ci --no-audit --no-fund --loglevel=error
+# REDISMS_DISABLE_POSTINSTALL: redis-memory-server (devDependency, tests only) would otherwise compile a redis binary during every deploy's npm ci.
+sudo -u novada env HOME=/var/lib/novada REDISMS_DISABLE_POSTINSTALL=1 npm ci --no-audit --no-fund --loglevel=error
 sudo -u novada env HOME=/var/lib/novada npm run build:server --silent
 sudo -u novada env HOME=/var/lib/novada npm prune --omit=dev --no-audit --no-fund --loglevel=error
 echo "$REL" | sudo -u novada tee "$R/RELEASE" >/dev/null   # marks the release as fully built
