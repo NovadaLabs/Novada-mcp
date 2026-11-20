@@ -44,7 +44,7 @@ opencode mcp add novada --url https://mcp.novada.com/mcp
 
 Then run `/mcps` in OpenCode, select `novada`, and sign in with your Novada account (OAuth).
 
-Cursor, Windsurf, VS Code and self-host (`npx -y novada-mcp`): see the [install guide](./npm-package/README.md). The hosted endpoint accepts the key only in an `Authorization: Bearer` header or via OAuth, never in a URL.
+Cursor, Windsurf, VS Code, Cline and self-host (`npx -y novada-mcp`): see the [install guide](./npm-package/README.md). The hosted endpoint accepts the key only in an `Authorization: Bearer` header or via OAuth, never in a URL.
 
 ## How to choose a tool
 

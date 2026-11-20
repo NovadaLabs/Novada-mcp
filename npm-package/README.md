@@ -198,6 +198,42 @@ Self-host: `opencode mcp add novada --env NOVADA_API_KEY=your_key -- npx -y nova
 
 Tested on OpenCode V2 (v2.2.6, OAuth sign-in).
 
+### Cline
+
+Cline can set this up for you: point it at [`llms-install.md`](https://github.com/NovadaLabs/Novada-mcp/blob/main/llms-install.md) and ask it to install the Novada MCP server.
+
+Or edit `cline_mcp_settings.json` yourself (Cline panel → MCP Servers → Configure → "Configure MCP Servers"):
+
+**Hosted:**
+```json
+{
+  "mcpServers": {
+    "novada": {
+      "type": "streamableHttp",
+      "url": "https://mcp.novada.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_KEY" }
+    }
+  }
+}
+```
+
+Set `"type": "streamableHttp"` explicitly — without it Cline falls back to the legacy SSE transport.
+
+**Local (self-host):**
+```json
+{
+  "mcpServers": {
+    "novada": {
+      "command": "npx",
+      "args": ["-y", "novada-mcp"],
+      "env": { "NOVADA_API_KEY": "your_key" }
+    }
+  }
+}
+```
+
+Tested on Cline v4.1.26 (VS Code, hosted, API key).
+
 ### Try it
 
 ```
