@@ -45,6 +45,7 @@ export async function startRedis() {
   let child = await spawnRedis(binary, port);
   return {
     port,
+    get pid() { return child?.pid; }, // for SIGSTOP/SIGCONT hung-redis tests
     url: `redis://127.0.0.1:${port}`,
     async stop() {
       if (!child) return;

@@ -35,12 +35,14 @@
  * - offline queue DISABLED: while redis is down a command fails immediately
  *   instead of queueing behind a dead socket;
  * - every command is raced against a 2 s deadline as a backstop;
+ * - circuit breaker: after a timeout/connection failure, calls fail fast for
+ *   KV_BREAKER_OPEN_MS, then one half-open probe decides (redis path only);
  * - all failures surface as thrown Errors, so the existing fail-open call
  *   sites (kvFailOpen, validateToken, cacheTokenVerify, …) keep working and
  *   the OAuth layer can map them to a structured 503.
  */
 import { kv as vercelKv } from "@vercel/kv";
-import { createClient } from "redis";
+import { createClient, ErrorReply } from "redis";
 
 /** SET options the codebase (and @upstash/redis) understands. */
 export interface KvSetOptions {
@@ -108,7 +110,8 @@ type RedisClient = ReturnType<typeof createClient>;
 let client: RedisClient | null = null;
 let clientUrl: string | null = null;
 let connecting: Promise<unknown> | null = null;
-let firstConnectWaited = false;
+/** Epoch ms until which not-ready callers wait on `connecting` (initial connect window). */
+let connectWindowEndsAt = 0;
 let lastErrorLogAt = 0;
 
 function logRedisError(msg: string, err: unknown): void {
@@ -144,7 +147,7 @@ function getClient(url: string): RedisClient {
   c.on("error", (err: unknown) => logRedisError("redis client error", err));
   client = c;
   clientUrl = url;
-  firstConnectWaited = false;
+  connectWindowEndsAt = Date.now() + KV_CONNECT_TIMEOUT_MS;
   console.log(JSON.stringify({ evt: "kv_backend", backend: "redis" }));
   connecting = c.connect().catch((err: unknown) => logRedisError("redis connect failed", err));
   return c;
@@ -159,15 +162,57 @@ function deadline<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return Promise.race([p, t]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
 
+// ── circuit breaker (redis path only) ─────────────────────────────────────────
+// After a command timeout / connection-class failure, fail fast for
+// BREAKER_OPEN_MS (no network call, no 2 s wait), then let exactly ONE probe
+// through (half-open): success closes the breaker, failure re-opens it.
+// Redis *reply* errors (WRONGTYPE, …) mean redis is alive and never trip it.
+export const KV_BREAKER_OPEN_MS = 5000;
+let breakerOpenUntil = 0;
+let breakerProbing = false;
+
+export class KvCircuitOpenError extends Error {
+  constructor() {
+    super("KV redis circuit open (recent timeout/connection failure)");
+    this.name = "KvCircuitOpenError";
+  }
+}
+
+function tripBreaker(err: unknown): void {
+  // ErrorReply = redis answered → backend healthy, don't trip.
+  if (err instanceof ErrorReply) return;
+  breakerOpenUntil = Date.now() + KV_BREAKER_OPEN_MS;
+}
+
 async function redisCommand(url: string, args: string[]): Promise<unknown> {
+  let probe = false;
+  if (breakerOpenUntil) {
+    if (Date.now() < breakerOpenUntil || breakerProbing) throw new KvCircuitOpenError();
+    breakerProbing = true; // half-open: this caller is the single probe
+    probe = true;
+  }
+  try {
+    const out = await redisCommandRaw(url, args);
+    if (probe) breakerOpenUntil = 0;
+    return out;
+  } catch (err) {
+    tripBreaker(err);
+    if (probe && err instanceof ErrorReply) breakerOpenUntil = 0;
+    throw err;
+  } finally {
+    if (probe) breakerProbing = false;
+  }
+}
+
+async function redisCommandRaw(url: string, args: string[]): Promise<unknown> {
   const c = getClient(url);
   if (!c.isReady) {
-    // Only the very first request after process start waits for the initial
-    // connect (≤ connect timeout). Afterwards a not-ready client fails fast
-    // while node-redis reconnects in the background with backoff.
-    if (!firstConnectWaited && connecting) {
-      firstConnectWaited = true;
-      await deadline(connecting, KV_CONNECT_TIMEOUT_MS, "connect");
+    // While the initial connect is in flight (≤ connect timeout) EVERY caller
+    // awaits the same `connecting` promise. Afterwards a not-ready client
+    // fails fast while node-redis reconnects in the background with backoff.
+    const remaining = connectWindowEndsAt - Date.now();
+    if (connecting && remaining > 0) {
+      await deadline(connecting, remaining, "connect");
     }
     if (!c.isReady) throw new Error("KV redis unavailable (not connected)");
   }
@@ -180,6 +225,9 @@ export async function kvClose(): Promise<void> {
   client = null;
   clientUrl = null;
   connecting = null;
+  connectWindowEndsAt = 0;
+  breakerOpenUntil = 0;
+  breakerProbing = false;
   if (c) {
     try { c.destroy(); } catch { /* already closed */ }
   }
@@ -232,3 +280,21 @@ export const kv = {
     return redisCommand(url, ["EXPIRE", key, String(seconds)]);
   },
 };
+
+/**
+ * One cheap round-trip through the SAME adapter the request path uses
+ * (SET + GET of a per-pid key, 10 s TTL). Backs the loopback-only /health/ready
+ * gate. Throws on any KV failure; returns the backend name on success.
+ * Unconfigured (neither REDIS_URL nor Upstash vars) is a failure: such an
+ * instance cannot serve authenticated traffic.
+ */
+export async function kvReadinessCheck(): Promise<"redis" | "vercel-kv"> {
+  if (!kvConfigured()) throw new Error("KV not configured (REDIS_URL / KV_REST_API_* unset)");
+  const stamp = String(Date.now());
+  const key = `health:ready:${process.pid}`; // per-process: cluster workers must not race on one key
+  await kv.set(key, stamp, { ex: 10 });
+  const back = await kv.get<string | number>(key);
+  // decodeValue turns "1700000000000" into a number; compare as strings.
+  if (String(back) !== stamp) throw new Error("KV readiness read-back mismatch");
+  return kvBackend();
+}
