@@ -15,6 +15,11 @@
       "failingSince": null,
       "alerted": false
     },
+    "oauth_register": {
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
+    },
     "unauthenticated_401": {
       "consecutiveFailures": 0,
       "failingSince": null,
