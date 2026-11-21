@@ -382,7 +382,7 @@ test("CHECK_TABLE: every row has an English id/label AND a non-empty Chinese lab
 });
 
 test("CHECK_TABLE: requiredEnvVars is a class-level declaration, not a per-id guess — every auth-requiring probe (and ONLY those) declares NOVADA_TEST_KEY", () => {
-  const authFreeIds = new Set(["oauth_discovery", "unauthenticated_401"]);
+  const authFreeIds = new Set(["oauth_discovery", "oauth_register", "unauthenticated_401"]);
   for (const row of CHECK_TABLE) {
     assert.ok(Array.isArray(row.requiredEnvVars), `${row.id}: requiredEnvVars must be an array`);
     if (authFreeIds.has(row.id)) {
@@ -406,6 +406,7 @@ test("requiredEnvVarsForCosts(['free','billable']): daily mode's set is a supers
 
 test("runChecks(['free']) only runs free rows, runChecks(['free','billable']) runs everything", async () => {
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     return jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } });
   };
@@ -427,6 +428,7 @@ test("runChecks: a throwing probe is caught and reported as a failed row, not a 
 
 test("runChecks({ids}): restricts to just the given ids, intersected with costs", async () => {
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     return jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } });
   };
@@ -449,6 +451,7 @@ test("runChecks({ids}): restricts to just the given ids, intersected with costs"
 test("runChecksWithConfirmation: no failures -> returns the first pass unchanged, sleep never called (no wasted wait)", async () => {
   let sleepCalled = false;
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     if (!opts.headers.authorization) return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
     const body = JSON.parse(opts.body);
@@ -469,6 +472,7 @@ test("runChecksWithConfirmation: a transient failure that PASSES on re-probe -> 
   let initializeCalls = 0;
   const sleepCalls = [];
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     if (!opts.headers.authorization) return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
     const body = JSON.parse(opts.body);
@@ -493,6 +497,7 @@ test("runChecksWithConfirmation: a transient failure that PASSES on re-probe -> 
 test("runChecksWithConfirmation: a failure CONFIRMED on re-probe stays failing (this is what should alert, same run)", async () => {
   let initializeCalls = 0;
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     if (!opts.headers.authorization) return jsonResponse(401, {}, { "www-authenticate": 'Bearer resource_metadata="x"' });
     const body = JSON.parse(opts.body);
@@ -516,6 +521,7 @@ test("runChecksWithConfirmation: a failure CONFIRMED on re-probe stays failing (
 test("runChecksWithConfirmation: config-class (missing-secret) failures are never re-probed; an unrelated real failure alongside them still is", async () => {
   const getCallCounts = {};
   const fetchFn = async (url, opts) => {
+    if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (opts.method === "GET") {
       getCallCounts[url] = (getCallCounts[url] || 0) + 1;
       // The protected-resource doc fails on its first fetch, succeeds on
@@ -558,4 +564,42 @@ test("HOSTED_FUNCTION_LIMIT_MS mirrors npm-package/src/config.ts exactly", async
   const m = src.match(/export const HOSTED_FUNCTION_LIMIT_MS\s*=\s*([\d_]+)\s*;/);
   assert.ok(m, "HOSTED_FUNCTION_LIMIT_MS not found in npm-package/src/config.ts — update this drift guard");
   assert.equal(HOSTED_FUNCTION_LIMIT_MS, Number(m[1].replace(/_/g, "")));
+});
+
+// ── oauth_register (2026-11-20 KV outage: discovery stayed 200 while /register 500'd) ──
+
+import { probeOAuthRegister } from "./checks.mjs";
+
+function registerFetch(status, body) {
+  return async (url, init) => {
+    assert.match(String(url), /\/register$/);
+    assert.equal(init.method, "POST");
+    const sent = JSON.parse(init.body);
+    assert.ok(sent.redirect_uris[0].startsWith("http://localhost"), "dummy localhost redirect");
+    return { status, headers: { get: () => null }, text: async () => (typeof body === "string" ? body : JSON.stringify(body)) };
+  };
+}
+
+test("probeOAuthRegister: 201 + client_id -> ok", async () => {
+  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(201, { client_id: "abc" }) });
+  assert.equal(r.ok, true);
+});
+
+test("probeOAuthRegister: HTTP 500 (the real outage) -> fail class http", async () => {
+  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(500, { error: "INTERNAL_ERROR" }) });
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "http");
+  assert.match(r.note, /HTTP 500/);
+});
+
+test("probeOAuthRegister: structured 503 (KV down) -> fail", async () => {
+  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(503, { error: "temporarily_unavailable" }) });
+  assert.equal(r.ok, false);
+});
+
+test("probeOAuthRegister: 2xx without client_id -> fail shape; network error -> fail network", async () => {
+  const shape = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(201, {}) });
+  assert.equal(shape.errorClass, "shape");
+  const net = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: async () => { throw new Error("ECONNREFUSED"); } });
+  assert.equal(net.errorClass, "network");
 });

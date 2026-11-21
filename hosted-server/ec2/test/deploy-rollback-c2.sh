@@ -79,7 +79,7 @@ assert_eq() {
 
 # ─── 1. Extract the REAL remote script body from deploy-ec2.sh ─────────────
 REMOTE_BODY="$SANDBOX/remote-body.sh"
-awk "/^ssh \"\\\$HOST\" REL=\"\\\$REL\" bash -s <<'REMOTE'\$/{flag=1; next} /^REMOTE\$/{flag=0} flag" \
+awk "/^ssh \"\\\$HOST\" REL=\"\\\$REL\" .*bash -s <<'REMOTE'\$/{flag=1; next} /^REMOTE\$/{flag=0} flag" \
   "$DEPLOY_SCRIPT" > "$REMOTE_BODY"
 LINES_EXTRACTED=$(wc -l < "$REMOTE_BODY" | tr -d ' ')
 if [ "$LINES_EXTRACTED" -lt 50 ]; then
@@ -200,7 +200,7 @@ esac
 EOF
 
 # fake curl: only understands the one form deploy-ec2.sh issues
-# (-fsS -m 3 http://127.0.0.1:<port>/health). Health is modeled on the
+# (-fsS -m 3 http://127.0.0.1:<port>/health/ready). Health is modeled on the
 # (port, actually-running-release) PAIR — via the same pid/cwd side-channel
 # the fake systemctl writes, not a bare port-keyed flag — so the SAME port
 # can legitimately be healthy on PREV and unhealthy on NEWREL (what makes a
@@ -215,7 +215,8 @@ url=""
 for a in "$@"; do
   case "$a" in http://*) url="$a" ;; esac
 done
-port="$(echo "$url" | sed -E 's#^http://127\.0\.0\.1:([0-9]+)/health$#\1#')"
+echo "$url" >> "$STATE/curl-urls"
+port="$(echo "$url" | sed -E 's#^http://127\.0\.0\.1:([0-9]+)/health/ready$#\1#')"
 pidfile="$STATE/port-${port}.pid"
 if [ -f "$pidfile" ]; then
   pid="$(cat "$pidfile")"
@@ -332,6 +333,50 @@ fi
 if grep -qi "RESTART FAILED for novada-mcp@3000\|HEALTH CHECK FAILED for novada-mcp@3000" "$OUTPUT"; then
   fail "@3000 must never appear as failed/restarted in the output — it was never touched"
 fi
+
+# ─── 7. Health-gate path: default, forwarded override, allowlist ───────────
+# Default run above must have gated on the KV-aware readiness path only.
+if grep -qv '/health/ready$' "$STATE/curl-urls"; then
+  fail "default deploy gated on a path other than /health/ready: $(sort -u "$STATE/curl-urls" | tr '\n' ' ')"
+else
+  echo "ok: default health gate = /health/ready" >&2
+fi
+# Both scripts must forward the VALIDATED value on the ssh line (ssh does not
+# forward local env) — a static guard against the 57e55fa regression.
+for s in "$DEPLOY_SCRIPT" "$(dirname "$DEPLOY_SCRIPT")/restart-rolling.sh"; do
+  if grep -qE '^ssh "\$HOST" .*NOVADA_MCP_HEALTH_PATH="\$HEALTH_PATH" bash -s <<' "$s"; then
+    echo "ok: $(basename "$s") forwards NOVADA_MCP_HEALTH_PATH to the remote shell" >&2
+  else
+    fail "$(basename "$s") does not forward NOVADA_MCP_HEALTH_PATH on its ssh line"
+  fi
+done
+# Behaviour: the remote logic with the override set (what the ssh env prefix
+# provides) gates on /health, and a fresh healthy run converges cleanly.
+: > "$STATE/curl-urls"
+NOVADA_MCP_HEALTH_PATH=/health PATH="$BIN:$PATH" "$RUNNER_BASH" "$RUNNER" >"$SANDBOX/output-override.log" 2>&1 || true
+if [ -s "$STATE/curl-urls" ] && ! grep -qv '/health$' "$STATE/curl-urls"; then
+  echo "ok: override run gated on /health only" >&2
+else
+  fail "override run did not gate on /health: $(sort -u "$STATE/curl-urls" | tr '\n' ' ')"
+fi
+# Allowlist: an invalid value is refused locally before any ssh/scp happens.
+cat > "$BIN/ssh" <<EOF2
+#!/usr/bin/env bash
+touch "$STATE/ssh-called"; exit 0
+EOF2
+cp "$BIN/ssh" "$BIN/scp"; chmod +x "$BIN/ssh" "$BIN/scp"
+for s in "$DEPLOY_SCRIPT" "$(dirname "$DEPLOY_SCRIPT")/restart-rolling.sh"; do
+  rm -f "$STATE/ssh-called"
+  set +e
+  NOVADA_MCP_HEALTH_PATH='/x;id' PATH="$BIN:$PATH" "$RUNNER_BASH" "$s" testhost >"$SANDBOX/output-bad.log" 2>&1
+  rc=$?
+  set -e
+  if [ "$rc" = 1 ] && grep -q "REFUSED: NOVADA_MCP_HEALTH_PATH" "$SANDBOX/output-bad.log" && [ ! -e "$STATE/ssh-called" ]; then
+    echo "ok: $(basename "$s") refuses an invalid NOVADA_MCP_HEALTH_PATH before ssh/scp" >&2
+  else
+    fail "$(basename "$s") invalid override: rc=$rc ssh-called=$([ -e "$STATE/ssh-called" ] && echo yes || echo no)"
+  fi
+done
 
 echo "" >&2
 if [ "$FAILURES" -gt 0 ]; then
