@@ -36,7 +36,14 @@
  * DEFAULT_TIMEOUT_MS, which is intentionally identical to FREE_CHECK_TIMEOUT_MS.
  */
 
+import tls from "node:tls";
+
 const DEFAULT_TIMEOUT_MS = 10_000;
+
+/** Alert (P1) when the leaf certificate has fewer than this many days left.
+ * Context: 2026-11-20 audit row c, the Let's Encrypt renewal on EC2 cannot
+ * run unattended; 21 days leaves time for a manual DNS-01 renewal. */
+export const TLS_EXPIRY_MIN_DAYS = 21;
 
 /**
  * 2026-10-23 incident (GitHub Actions run 39935519239): the first real daily
@@ -347,6 +354,52 @@ export async function probeOAuthRegister(ctx) {
   }
 }
 
+/**
+ * TLS certificate-expiry probe (2026-11-20 audit rows c/p): a handshake to the
+ * host:port of ctx.mcpUrl, reads the LEAF certificate's valid_to and fails
+ * when it is < TLS_EXPIRY_MIN_DAYS away (or the handshake itself fails).
+ * `ctx.tlsFn(host, port, timeoutMs) => Promise<{validTo: string|Date}>` is
+ * injectable so tests run offline. Plain-http URLs (local e2e) are skipped
+ * as ok; production is always https.
+ */
+export function defaultTlsFn(host, port, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: false, timeout: timeoutMs }, () => {
+      const cert = socket.getPeerCertificate();
+      socket.end();
+      if (!cert || !cert.valid_to) return reject(new Error("no peer certificate"));
+      resolve({ validTo: cert.valid_to });
+    });
+    socket.on("timeout", () => { socket.destroy(); reject(Object.assign(new Error("timeout"), { name: "TimeoutError" })); });
+    socket.on("error", reject);
+  });
+}
+
+export async function probeTlsExpiry(ctx) {
+  const base = new URL(ctx.mcpUrl);
+  const startedAt = Date.now();
+  if (base.protocol !== "https:") return ok(0, `skipped: ${base.protocol} URL has no TLS`);
+  const host = base.hostname;
+  const port = base.port ? Number(base.port) : 443;
+  const timeoutMs = ctx.timeoutMs || DEFAULT_TIMEOUT_MS;
+  try {
+    const { validTo } = await (ctx.tlsFn || defaultTlsFn)(host, port, timeoutMs);
+    const latencyMs = Date.now() - startedAt;
+    const expiresAt = new Date(validTo);
+    if (Number.isNaN(expiresAt.getTime())) return fail(latencyMs, "shape", null, `TLS ${host}:${port}: unparseable certificate expiry "${validTo}"`);
+    const daysLeft = Math.floor(((expiresAt.getTime() - (ctx.now ? ctx.now() : Date.now())) / 86_400_000) * 10) / 10;
+    if (daysLeft < TLS_EXPIRY_MIN_DAYS) {
+      return fail(latencyMs, "tls", null, `TLS ${host}:${port}: certificate expires in ${daysLeft} days (< ${TLS_EXPIRY_MIN_DAYS}), on ${expiresAt.toISOString().slice(0, 10)}`, { daysLeft });
+    }
+    return ok(latencyMs, `certificate valid for ${daysLeft} more days`, { daysLeft });
+  } catch (err) {
+    const latencyMs = Date.now() - startedAt;
+    const timedOut = isTimeoutError(err);
+    const msg = timedOut ? `timeout after ${timeoutMs}ms` : String(err?.message || err);
+    return fail(latencyMs, timedOut ? "timeout" : "network", null, `TLS ${host}:${port}: handshake failed: ${msg}`);
+  }
+}
+
 export async function probeUnauthenticated401(ctx) {
   // /mcp is POST-only for JSON-RPC in normal use, but the hosted gateway's
   // auth gate runs before method dispatch — a bare unauthenticated POST
@@ -494,6 +547,7 @@ export const CHECK_TABLE = [
   { id: "tools_list", label: "tools/list (count vs golden baseline)", labelZh: "工具列表检查（对比基线数量）", probe: probeToolsList, cost: "free", severity: "P0", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "oauth_discovery", label: "OAuth discovery (.well-known/*)", labelZh: "OAuth 发现端点检查", probe: probeOAuthDiscovery, cost: "free", severity: "P0", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "oauth_register", label: "OAuth register (POST /register, storage path)", labelZh: "OAuth 注册端点检查（POST /register，存储链路）", probe: probeOAuthRegister, cost: "free", severity: "P0", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
+  { id: "tls_expiry", label: "TLS certificate expiry (< 21 days)", labelZh: "TLS 证书到期检查（少于 21 天告警）", probe: probeTlsExpiry, cost: "free", severity: "P1", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "unauthenticated_401", label: "unauthenticated /mcp -> 401 (sign-in entry)", labelZh: "未授权访问检查（登录入口可达性）", probe: probeUnauthenticated401, cost: "free", severity: "P0", requiredEnvVars: [], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "novada_setup", label: "novada_setup (free tool dispatch)", labelZh: "novada_setup 免费工具调用检查", probe: probeNovadaSetup, cost: "free", severity: "P1", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: FREE_CHECK_TIMEOUT_MS, slowThresholdMs: FREE_SLOW_THRESHOLD_MS },
   { id: "novada_search", label: "novada_search", labelZh: "novada_search 工具检查", probe: probeNovadaSearch, cost: "billable", severity: "P1", requiredEnvVars: [API_KEY_ENV_VAR], timeoutMs: BILLABLE_CHECK_TIMEOUT_MS, slowThresholdMs: BILLABLE_SLOW_THRESHOLD_MS },

@@ -24,6 +24,7 @@ new probe is a new row there, not a new branch anywhere else):
 | `tools_list` | `tools/list` count vs the committed golden baseline (`hosted-server/scripts/golden/baseline/toolslist-default.json`) | P0 | yes |
 | `oauth_discovery` | `/.well-known/oauth-protected-resource/mcp` + `/.well-known/oauth-authorization-server` reachable, required RFC 9728/8414 fields present | P0 | no |
 | `oauth_register` | `POST /register` with a dummy localhost redirect returns 2xx + `client_id` (exercises the KV storage path that discovery never touches; added after the 2026-11-20 KV outage) | P0 | no |
+| `tls_expiry` | TLS handshake to the `mcp.novada.com:443` host from `MCP_URL`; fails when the leaf certificate expires in fewer than 21 days or the handshake fails (EC2 renewal is not automatic, audit 2026-11-20) | P1 | no |
 | `unauthenticated_401` | an unauthenticated POST `/mcp` returns 401 + `WWW-Authenticate: ... resource_metadata=...` (proves the sign-in entry point itself is reachable) | P0 | no |
 | `novada_setup` | one free `tools/call` round trip | P1 | yes |
 
