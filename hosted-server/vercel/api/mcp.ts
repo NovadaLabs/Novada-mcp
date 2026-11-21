@@ -47,6 +47,8 @@ import {
   encryptHqIdentity,
   classifyDispatchOutcome,
   resolveServerVersion,
+  resolveSentryEnvironment,
+  resolveTelemetryRegion,
 } from "./_telemetry.js";
 import type { RejectionStage, AuthMethod, McpEventRow } from "./_telemetry.js";
 // HQ log-ingest push (Leo's /mcp/log/create contract) — see ./_hq_push.ts. Fail-safe
@@ -58,7 +60,7 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     tracesSampleRate: 0,  // errors only, no performance overhead
-    environment: process.env.VERCEL_ENV ?? "development",
+    environment: resolveSentryEnvironment(process.env),
     // Explicit (connector-review hardening, 2026-10): never let Sentry's default
     // instrumentation attach IP address / cookies / other PII-shaped request data
     // beyond what sentryBeforeSend/sentryBeforeBreadcrumb below explicitly keep.
@@ -1200,7 +1202,7 @@ async function emitGuardRejection(params: {
       over_cap_allowed: null,
       quota_remaining: null,
       server_version: resolveServerVersion(process.env, HOSTED_VERSION),
-      region: process.env.VERCEL_REGION ?? null,
+      region: resolveTelemetryRegion(process.env),
       rejection_stage: params.rejectionStage,
       auth_method: params.authMethod,
       user_agent: params.userAgent,
@@ -1537,7 +1539,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         client_version: cv?.version != null ? String(cv.version) : null,
         protocol_version: null,   // not accessible via SDK public API post-negotiation
         server_version: resolveServerVersion(process.env, HOSTED_VERSION),
-        region: process.env.VERCEL_REGION ?? null,
+        region: resolveTelemetryRegion(process.env),
         auth_method: ctx.authMethod,
         user_agent: ctx.userAgent,
         hq_identity: hq.hq_identity,
@@ -1568,7 +1570,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // for the full root-cause writeup of this split.
     // Falls back gracefully when called outside a Vercel context (tests, local dev).
     const telSV = resolveServerVersion(process.env, HOSTED_VERSION);
-    const telRegion = process.env.VERCEL_REGION ?? null;
+    const telRegion = resolveTelemetryRegion(process.env);
     // Single authoritative telemetry emitter for every tool_call row in this
     // handler. product/status_bucket/failure_class are ALWAYS derived inside
     // buildToolCallEvent (governed, single-source functions) — never computed
