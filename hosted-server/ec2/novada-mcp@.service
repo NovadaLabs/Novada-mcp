@@ -30,8 +30,12 @@
 # concurrency.
 [Unit]
 Description=Novada MCP hosted server (mcp.novada.com) — instance on port %i
-After=network-online.target
-Wants=network-online.target
+After=network-online.target redis-server.service
+Wants=network-online.target redis-server.service
+# KV is a LOCAL Redis since 2026-11-20 (REDIS_URL in /etc/novada-mcp/env — never
+# in this repo). Order after it on boot and pull it in; Wants= (not Requires=)
+# so a Redis restart never takes the app down. See the 2026-11-20 KV cutover
+# runbook (internal).
 # Same reasoning as the old single unit (see ops review 2026-10-23): a bad
 # release makes the primary exit(1) after 3 early worker deaths (~1-2s); with
 # RestartSec=2 that is a short cycle which systemd's compiled-in default
