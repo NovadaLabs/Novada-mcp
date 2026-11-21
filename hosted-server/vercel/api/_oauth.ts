@@ -65,6 +65,47 @@ export interface OAuthDeps {
   randomBytes?(n: number): Uint8Array;
 }
 
+// ─── KV failure classification ────────────────────────────────────────────────
+
+/**
+ * Thrown (by guardKv) when ANY KV dep call rejects — i.e. the store is
+ * unreachable/erroring, as opposed to a clean miss (kvGet resolving null).
+ * Callers map it to a retryable 503; a miss stays a 401/invalid_grant.
+ * Defined here (not imported) so this module stays zero-import.
+ */
+export class KvUnavailableError extends Error {
+  readonly cause?: unknown;
+  constructor(op: string, cause?: unknown) {
+    super(`KV unavailable during ${op}`);
+    this.name = "KvUnavailableError";
+    this.cause = cause;
+  }
+}
+
+/** Seconds a client should wait before retrying after a KV failure. */
+const KV_RETRY_AFTER_S = 5;
+
+/** Wrap the five KV deps so any rejection becomes a KvUnavailableError. */
+function guardKv(deps: OAuthDeps): OAuthDeps {
+  const wrap = <A extends unknown[], R>(op: string, fn: (...a: A) => Promise<R>) =>
+    async (...a: A): Promise<R> => {
+      try {
+        return await fn(...a);
+      } catch (err) {
+        if (err instanceof KvUnavailableError) throw err;
+        throw new KvUnavailableError(op, err);
+      }
+    };
+  return {
+    ...deps,
+    kvGet: wrap("get", deps.kvGet),
+    kvSet: wrap("set", deps.kvSet),
+    kvGetDel: wrap("getdel", deps.kvGetDel),
+    kvIncr: wrap("incr", deps.kvIncr),
+    kvExpire: wrap("expire", deps.kvExpire),
+  };
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Authorization codes — single-use, must be redeemed within this window. */
@@ -469,6 +510,15 @@ function rateLimitedResponse(limit: number): Response {
   });
 }
 
+/** KV store down/erroring — retryable, and NOT a 500 (a 500 reads as "server bug"). */
+export function kvUnavailableResponse(): Response {
+  return oauthJson(503, {
+    error: "temporarily_unavailable",
+    error_description: "The authorization server's storage is temporarily unavailable.",
+    agent_instruction: `Retry the same request after ${KV_RETRY_AFTER_S} seconds with backoff. Do NOT discard existing tokens or registrations — they are not invalid. If it persists, use a raw Novada API key as a Bearer token instead.`,
+  }, { "retry-after": String(KV_RETRY_AFTER_S) });
+}
+
 /** Grant endpoints fail closed when the at-rest encryption key is absent or
  *  malformed — metadata discovery keeps working (pure functions, no config). */
 function encKeyMissingResponse(): Response {
@@ -650,6 +700,26 @@ export async function handleOAuthRequest(request: Request, url: URL, ip: string,
   // Grant endpoints below all persist or read encrypted caller keys — without
   // the encryption key the whole flow is unusable, so fail closed up front.
   if (!deps.encKeyB64) return encKeyMissingResponse();
+
+  // Every KV rejection below (rate-limit incr included) becomes a structured,
+  // retryable 503 instead of an unhandled throw → 500 INTERNAL_ERROR.
+  try {
+    return await dispatchGrantEndpoint(request, url, ip, guardKv(deps), method);
+  } catch (err) {
+    if (err instanceof KvUnavailableError) {
+      console.error(JSON.stringify({
+        evt: "oauth_kv_unavailable",
+        path: pathname,
+        error: err.cause instanceof Error ? err.cause.message.slice(0, 200) : String(err.cause ?? err.message).slice(0, 200),
+      }));
+      return kvUnavailableResponse();
+    }
+    throw err;
+  }
+}
+
+async function dispatchGrantEndpoint(request: Request, url: URL, ip: string, deps: OAuthDeps, method: string): Promise<Response> {
+  const pathname = url.pathname;
 
   if (pathname === "/register") {
     if (method !== "POST") return methodNotAllowed("POST, OPTIONS");
@@ -1161,7 +1231,8 @@ export async function handleToken(request: Request, ip: string, deps: OAuthDeps)
  * Resolve a Bearer nvo_at_* access token to the underlying plaintext Novada
  * API key. Returns null on KV miss (expired/unknown), decrypt failure, or a
  * missing/malformed encryption key — mcp.ts turns null into a 401 with a
- * refresh instruction. Never throws.
+ * refresh instruction. Throws KvUnavailableError when the KV read itself
+ * ERRORS (mcp.ts → 503, never 401).
  */
 export async function resolveAccessToken(token: string, deps: OAuthDeps): Promise<string | null> {
   return (await resolveAccessTokenRecord(token, deps))?.apiKey ?? null;
@@ -1174,15 +1245,18 @@ export interface ResolvedAccessToken {
   clientId: string;
 }
 
-/** Same resolution as resolveAccessToken, also returning the token's client_id. Never throws. */
+/** Same resolution as resolveAccessToken, also returning the token's client_id. Throws KvUnavailableError on a KV error. */
 export async function resolveAccessTokenRecord(token: string, deps: OAuthDeps): Promise<ResolvedAccessToken | null> {
   const encKey = await loadEncKey(deps);
   if (!encKey) return null;
   let raw: unknown;
   try {
     raw = await deps.kvGet(`oauthat:${await sha256Hex(token)}`);
-  } catch {
-    return null; // KV hiccup → fail closed to 401 (client refreshes/retries)
+  } catch (err) {
+    // KV ERROR ≠ KV MISS. A miss (null, below) is a genuine expired/unknown
+    // token → 401. An error must NOT become a 401: clients discard their
+    // tokens on 401 and force a full re-auth. Surface it so mcp.ts → 503.
+    throw err instanceof KvUnavailableError ? err : new KvUnavailableError("get", err);
   }
   const rec = parseTokenRecord(raw);
   if (!rec) return null;

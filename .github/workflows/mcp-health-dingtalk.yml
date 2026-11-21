@@ -8,8 +8,9 @@ name: MCP Health (DingTalk)
 #
 # Two independent cadences (design doc §7, Phase 1):
 #   - alert-check: FREE checks only (initialize / tools-list vs golden
-#     baseline / OAuth discovery / unauthenticated-401 sign-in entry /
-#     novada_setup), 4x/day at off-peak minutes (2026-10-25 cadence change —
+#     baseline / OAuth discovery / OAuth register (POST /register — the KV
+#     storage path, added after the 2026-11-20 KV outage) /
+#     unauthenticated-401 sign-in entry / novada_setup), 4x/day at off-peak minutes (2026-10-25 cadence change —
 #     every 15 minutes was too much; GitHub's own scheduler was only
 #     actually managing to run this every ~3-4h anyway). Confirmation: a
 #     failing check gets ONE re-probe inside the SAME run, after a short

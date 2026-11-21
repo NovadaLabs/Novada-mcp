@@ -3,6 +3,11 @@
 # Usage: deploy-ec2.sh [ssh-host]   (default: novada-mcp from ~/.ssh/config)
 set -euo pipefail
 HOST="${1:-novada-mcp}"
+# Health gate path. Default /health/ready exercises KV, so a deploy is refused while KV is down.
+# Emergency code-only fix during a KV outage: NOVADA_MCP_HEALTH_PATH=/health (static liveness only).
+HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
+case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
+[ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
 ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
 DIRTY="$(git -C "$ROOT" status --porcelain -- hosted-server/vercel | grep -q . && echo -dirty || true)"
@@ -14,7 +19,7 @@ trap 'rm -f "$TAR"' EXIT
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -C "$SRC" --exclude node_modules --exclude dist --exclude .vercel --exclude '.env*' -czf "$TAR" .
 scp -q "$TAR" "$HOST:/tmp/novada-mcp-$REL.tgz"
 
-ssh "$HOST" REL="$REL" bash -s <<'REMOTE'
+ssh "$HOST" REL="$REL" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
 set -euo pipefail
 # NOVADA_MCP_ROOT: test-only override (mirrors NOVADA_SKIP_HOSTED_FORCE's
 # convention in hosted-server/vercel/server.mts) -- defaults to the real
@@ -33,7 +38,8 @@ trap 'rm -f "$TGZ"; if [ ! -f "$R/RELEASE" ]; then sudo rm -rf "$R"; echo "BUILD
 sudo -u novada mkdir -p "$R"
 sudo -u novada tar -C "$R" -xzf "$TGZ"
 cd "$R"
-sudo -u novada env HOME=/var/lib/novada npm ci --no-audit --no-fund --loglevel=error
+# REDISMS_DISABLE_POSTINSTALL: redis-memory-server (devDependency, tests only) would otherwise compile a redis binary during every deploy's npm ci.
+sudo -u novada env HOME=/var/lib/novada REDISMS_DISABLE_POSTINSTALL=1 npm ci --no-audit --no-fund --loglevel=error
 sudo -u novada env HOME=/var/lib/novada npm run build:server --silent
 sudo -u novada env HOME=/var/lib/novada npm prune --omit=dev --no-audit --no-fund --loglevel=error
 echo "$REL" | sudo -u novada tee "$R/RELEASE" >/dev/null   # marks the release as fully built
@@ -74,7 +80,7 @@ cd /
 # rejected.
 INSTANCE_PORTS="3000 3001"
 
-health_once() { curl -fsS -m 3 "http://127.0.0.1:$1/health" >/dev/null 2>&1; }
+health_once() { curl -fsS -m 3 "http://127.0.0.1:$1${NOVADA_MCP_HEALTH_PATH:-/health/ready}" >/dev/null 2>&1; }
 # NOVADA_MCP_HEALTH_POLL_S: test-only override of the health-poll duration
 # (default unchanged at 30, matching the production 30s health-poll window
 # documented throughout this file). test/deploy-rollback-c2.sh shortens this
