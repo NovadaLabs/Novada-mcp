@@ -1044,3 +1044,29 @@ test("mcp.ts source: F1 browser-tier caller-key pre-resolution covers both novad
   );
   assert.match(src, /const extractNeedsBrowserTier = name === "novada_extract"/);
 });
+
+// ── row u (2026-11-21 audit): server_version must never be null on a telemetry row ──
+import { resolveServerVersion } from "../api/_telemetry.ts";
+import { readFileSync as _readFileSync } from "node:fs";
+
+test("resolveServerVersion: env unset -> falls back to the serverInfo version; env set -> env wins", () => {
+  assert.equal(resolveServerVersion({}, "0.9.52-hosted"), "0.9.52-hosted");
+  assert.equal(resolveServerVersion({ NOVADA_SERVER_VERSION: "x" }, "0.9.52-hosted"), "x");
+});
+
+test("a telemetry row built with NOVADA_SERVER_VERSION unset carries the serverInfo version", () => {
+  const row = buildInitializeEvent({
+    request_id: "r", token_hash: null, plan: null, client_name: null, client_version: null,
+    protocol_version: null, server_version: resolveServerVersion({}, "0.9.52-hosted"), region: null,
+    auth_method: "bearer", user_agent: null, hq_identity: null, key_version: null,
+  });
+  assert.equal(row.server_version, "0.9.52-hosted");
+});
+
+test("mcp.ts: serverInfo.version, the env propagation and every telemetry server_version share HOSTED_VERSION", () => {
+  const src = _readFileSync(new URL("../api/mcp.ts", import.meta.url), "utf8");
+  assert.match(src, /name: "novada", version: HOSTED_VERSION/);
+  assert.match(src, /process\.env\.NOVADA_SERVER_VERSION = HOSTED_VERSION;/);
+  assert.doesNotMatch(src, /NOVADA_SERVER_VERSION \?\? null/);
+  assert.equal((src.match(/resolveServerVersion\(process\.env, HOSTED_VERSION\)/g) || []).length, 3);
+});

@@ -308,6 +308,17 @@ export function telemetryEnabled(): boolean {
   return !!(process.env.TELEMETRY_SUPABASE_URL && process.env.TELEMETRY_SUPABASE_KEY);
 }
 
+/**
+ * server_version for a telemetry row: the env value if present, else the SAME
+ * string serverInfo.version carries (HOSTED_VERSION in mcp.ts, the single
+ * source). mcp.ts also assigns HOSTED_VERSION to NOVADA_SERVER_VERSION at
+ * module init, so on EC2 the env is never actually unset; this keeps the row
+ * correct even if that assignment is ever removed.
+ */
+export function resolveServerVersion(env: Record<string, string | undefined>, hostedVersion: string): string {
+  return env.NOVADA_SERVER_VERSION ?? hostedVersion;
+}
+
 // ─── Target-domain extraction (Tier 2, owner-approved) ───────────────────────
 
 /**

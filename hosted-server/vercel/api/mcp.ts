@@ -46,6 +46,7 @@ import {
   emitEvent,
   encryptHqIdentity,
   classifyDispatchOutcome,
+  resolveServerVersion,
 } from "./_telemetry.js";
 import type { RejectionStage, AuthMethod, McpEventRow } from "./_telemetry.js";
 // HQ log-ingest push (Leo's /mcp/log/create contract) — see ./_hq_push.ts. Fail-safe
@@ -1198,7 +1199,7 @@ async function emitGuardRejection(params: {
       charged: null,
       over_cap_allowed: null,
       quota_remaining: null,
-      server_version: process.env.NOVADA_SERVER_VERSION ?? null,
+      server_version: resolveServerVersion(process.env, HOSTED_VERSION),
       region: process.env.VERCEL_REGION ?? null,
       rejection_stage: params.rejectionStage,
       auth_method: params.authMethod,
@@ -1535,7 +1536,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
         client_name: cv?.name ?? null,
         client_version: cv?.version != null ? String(cv.version) : null,
         protocol_version: null,   // not accessible via SDK public API post-negotiation
-        server_version: process.env.NOVADA_SERVER_VERSION ?? null,
+        server_version: resolveServerVersion(process.env, HOSTED_VERSION),
         region: process.env.VERCEL_REGION ?? null,
         auth_method: ctx.authMethod,
         user_agent: ctx.userAgent,
@@ -1566,7 +1567,7 @@ function buildServer(apiKey: string, env: Env, ctx: { token: string; tokenHash: 
     // waitUntil, unchanged. See captureEvent's doc comment above buildServer
     // for the full root-cause writeup of this split.
     // Falls back gracefully when called outside a Vercel context (tests, local dev).
-    const telSV = process.env.NOVADA_SERVER_VERSION ?? null;
+    const telSV = resolveServerVersion(process.env, HOSTED_VERSION);
     const telRegion = process.env.VERCEL_REGION ?? null;
     // Single authoritative telemetry emitter for every tool_call row in this
     // handler. product/status_bucket/failure_class are ALWAYS derived inside
