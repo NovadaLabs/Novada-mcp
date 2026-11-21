@@ -650,3 +650,9 @@ test("oauth_register: target whose /register returns 201 -> zero alerts", async 
   assert.equal(exit, 0);
   assert.equal(posted.length, 0);
 });
+
+test("classifyFailure: tls (cert expiring soon) -> TLS annotation, not 未分类, not an account issue", () => {
+  const cls = classifyFailure({ errorClass: "tls" });
+  assert.equal(cls.annotation, "TLS 证书即将到期");
+  assert.equal(cls.accountIssue, false);
+});

@@ -18,7 +18,7 @@
  *   async (ctx) => {
  *     ok: boolean,
  *     latencyMs: number,
- *     errorClass: string|null,   // "network" | "timeout" | "http" | "shape" | "tool" | "rpc" | "config" | "exception" | null
+ *     errorClass: string|null,   // "network" | "timeout" | "http" | "shape" | "tool" | "rpc" | "config" | "tls" | "exception" | null
  *     errorCode: string|null,    // NovadaErrorCode (billable tool checks) or a short local code
  *     note: string,              // one-line human-readable summary, safe to print (no secrets)
  *     detail: Record<string, unknown>|null,  // extra structured data (e.g. {version}, {toolCount})

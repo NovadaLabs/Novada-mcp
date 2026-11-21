@@ -644,3 +644,14 @@ test("probeTlsExpiry: probes host:port from mcpUrl; severity P1 in CHECK_TABLE",
   assert.deepEqual(seen, ["mcp.novada.com", 443]);
   assert.equal(CHECK_TABLE.find((r) => r.id === "tls_expiry").severity, "P1");
 });
+
+test("probeTlsExpiry: real OpenSSL valid_to format ('Feb 20 12:00:00 2027 GMT') is parsed", async () => {
+  const now = Date.parse("2026-11-21T00:00:00Z");
+  const mk = (validTo) => ({ mcpUrl: "https://mcp.novada.com/mcp", now: () => now, tlsFn: async () => ({ validTo }) });
+  const far = await probeTlsExpiry(mk("Feb 20 12:00:00 2027 GMT"));
+  assert.equal(far.ok, true);
+  assert.ok(far.detail.daysLeft > 90 && far.detail.daysLeft < 93, String(far.detail.daysLeft));
+  const near = await probeTlsExpiry(mk("Dec  5 12:00:00 2026 GMT"));
+  assert.equal(near.ok, false);
+  assert.equal(near.errorClass, "tls");
+});
