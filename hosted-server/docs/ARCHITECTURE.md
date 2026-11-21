@@ -12,10 +12,10 @@ AI client (Claude Desktop / Cursor / Cline / Windsurf / VS Code)
      │  Streamable HTTP  (POST + GET on /mcp)
      │  Auth: Authorization: Bearer …  OR  OAuth 2.1 access token (same header)
      ▼
-Vercel Function  (mcp.novada.com — Node.js serverless runtime, single region)
+EC2 host  (mcp.novada.com — nginx → 2 Node instances novada-mcp@3000/@3001, Frankfurt)
      │
      ├─ Token validation   (stubbed → sub2api in v0.2)
-     ├─ Per-IP rate limit  (Vercel KV, Upstash Redis: 60 req/min — no call cap)
+     ├─ Per-IP rate limit  (KV = local Redis via REDIS_URL, Upstash REST fallback: 60 req/min — no call cap)
      ├─ Tool dispatch      (re-uses novada-mcp tool handlers, vendored from npm-package)
      └─ Telemetry          → Sentry (errors) + custom behavior-telemetry event log
      │
@@ -85,25 +85,33 @@ sk-eu-novada-{32 random base62 chars}
 
 ## 5. Deployment
 
-- **Runtime:** Vercel Function, **Node.js serverless runtime** (`vercel/api/mcp.ts` sets
-  `export const config = { runtime: "nodejs", maxDuration: 300 }`) — explicitly **not**
-  Edge, because the tool implementations depend on Node-only modules (`axios`, `cheerio`,
-  `playwright-core`, `exceljs`, `pdf-parse`) and the MCP SDK uses `EventEmitter`. Trade-off
-  vs Edge: ~200ms cold start (vs ~50ms) and single-region (vs global edge) in exchange for
-  the full tool surface working without porting.
-- **Domain:** `mcp.novada.com` → Vercel custom domain via CNAME (`cname.vercel-dns.com`);
-  Novada's DNS stays on AWS Route 53, only the CNAME is added there.
-- **Storage:** Vercel KV (Upstash Redis under the hood, via `@vercel/kv`) for the
-  per-IP rate limit, token-verification cache, and first-run-notice flag. There
-  is no per-token quota counter — see §4.
-- **Telemetry:** Sentry (`@sentry/node`, errors only, `tracesSampleRate: 0`) plus a
-  custom metadata-only behavior-telemetry event log (see `vercel/api/_telemetry.ts`).
-- **Deploy:** manual, gated — `hosted-server/scripts/deploy-hosted.sh` (build →
-  vendor → gate → `vercel deploy --prod` → verify against a golden baseline). Not
-  automatic CI-on-push; there is no `wrangler` step anywhere in the live path.
+> Production moved from Vercel to **AWS EC2 on 2026-10-29**; the Vercel project is
+> **paused** (not a standby). KV moved to a local Redis on 2026-11-20.
+
+- **Runtime:** a Node 24 process per instance (`vercel/server.mts` is the entrypoint;
+  `vercel/api/mcp.ts` keeps the `maxDuration: 300` tool budget). Two systemd template
+  instances `novada-mcp@3000` / `@3001` sit behind nginx on one EC2 host (`hosted-server/ec2/`).
+  The Node-only tool dependencies (`axios`, `cheerio`, `playwright-core`, `exceljs`, `pdf-parse`)
+  and the MCP SDK's `EventEmitter` still rule out an Edge runtime.
+- **Domain / DNS:** `mcp.novada.com` (and `mcp-staging.novada.com`, an alias of production)
+  are **A records in AWS Route 53 (TTL 60) pointing at the EC2 public IP**. TLS terminates on nginx
+  (Let's Encrypt certificate; renewal is currently manual DNS-01, tracked in the 2026-11-20 audit,
+  and the health monitor alerts when expiry is under 21 days).
+- **Storage (KV):** a **local Redis** (`redis-server`, bound to 127.0.0.1) selected by
+  `REDIS_URL` in `/etc/novada-mcp/env`, used for the per-IP rate limit, the token-verification
+  cache, first-run-notice flag, and OAuth state. When `REDIS_URL` is unset the adapter falls back
+  to Upstash REST (`KV_REST_API_URL`/`KV_REST_API_TOKEN`, via `@vercel/kv`); rollback is "unset
+  `REDIS_URL` and restart". See `vercel/api/_kv.ts`. There is no per-token quota counter — see §4.
+- **Telemetry:** Sentry (`@sentry/node`, errors only, `tracesSampleRate: 0`; environment from
+  `SENTRY_ENVIRONMENT`, falling back to `VERCEL_ENV`) plus a custom metadata-only behavior-telemetry
+  event log (see `vercel/api/_telemetry.ts`; region from `NOVADA_REGION`, falling back to `VERCEL_REGION`).
+- **Deploy:** manual, gated — re-vendor with `hosted-server/scripts/deploy-hosted.sh --vendor-only`
+  (build → vendor → gates), commit, then `hosted-server/ec2/deploy-ec2.sh` (one instance at a time,
+  health-gated, automatic rollback). `deploy-hosted.sh` REFUSES its legacy Vercel deploy phase unless
+  `--vercel-standby` is passed. Not automatic CI-on-push.
 - A dormant Cloudflare Workers port of this same logic exists at `hosted-server/worker/`
-  for reference / potential rollback only — it is **not** deployed. See
-  `hosted-server/README.md` for the ACTIVE-vs-DORMANT layout.
+  for reference only — it is **not** deployed. See `hosted-server/README.md` for the
+  ACTIVE-vs-DORMANT layout.
 
 ---
 
@@ -114,7 +122,7 @@ sk-eu-novada-{32 random base62 chars}
 | Missing / malformed token       | 401    | `{ "error": "invalid_token" }`                  |
 | Per-IP rate limit exceeded      | 429    | `Retry-After: 60`                               |
 | Tool error (upstream 5xx etc.)  | 200    | JSON-RPC error wrapped in MCP response          |
-| Vercel Function timeout (`maxDuration`, 300s) | 5xx | Logged + alert; client must retry     |
+| Tool budget / request timeout (300s tool budget, 310s nginx + Node) | 5xx | Logged + alert; client must retry     |
 | Unknown tool name               | 200    | JSON-RPC `MethodNotFound` (-32601)              |
 | Malformed JSON-RPC              | 400    | `{ "error": "invalid_request" }`                |
 

@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# deploy-hosted.sh — End-to-end gated deploy of Novada hosted MCP to mcp.novada.com
+# deploy-hosted.sh — build + vendor + gates for the hosted MCP; Vercel deploy ONLY as standby
+#
+# ⚠️ PRODUCTION (mcp.novada.com) RUNS ON AWS EC2 SINCE 2026-10-29, and the Vercel
+# project is PAUSED. Production deploys use hosted-server/ec2/deploy-ec2.sh.
+# This script now REFUSES to run unless you pass --vendor-only (phases 1-3, the
+# normal use: re-vendor + gates) or --vercel-standby (also runs the legacy Vercel
+# DEPLOY/VERIFY phases; its VERIFY curls mcp.novada.com, which is EC2).
 #
 # WHAT IT DOES (5 phases):
 #   1. BUILD   — tsc type-check + npm build + core smoke-test (novada-mcp repo)
@@ -34,7 +40,9 @@
 #
 # USAGE:
 #   export NOVADA_MCP_KEY=<your-key>   # optional — falls back to the test key
-#   ./scripts/deploy-hosted.sh
+#   ./scripts/deploy-hosted.sh --vendor-only      # build + vendor + gates (no deploy)
+#   ./scripts/deploy-hosted.sh --vercel-standby   # legacy: ALSO vercel deploy --prod (project is paused)
+#   (no flag -> refuses: "production deploys use hosted-server/ec2/deploy-ec2.sh")
 #
 #   --vendor-only   Run phases 1-3 only (BUILD, VENDOR, GATES) and exit 0 — never
 #                    reaches DEPLOY/VERIFY, so it never calls `vercel deploy` and
@@ -51,12 +59,24 @@
 #   npx vercel promote <prev-deployment-url> --scope novadateam-mvps
 
 VENDOR_ONLY=false
+VERCEL_STANDBY=false
 for arg in "$@"; do
     case "$arg" in
         --vendor-only) VENDOR_ONLY=true ;;
-        *) echo "[ERROR] Unknown argument: $arg (supported: --vendor-only)" >&2; exit 1 ;;
+        --vercel-standby) VERCEL_STANDBY=true ;;
+        *) echo "[ERROR] Unknown argument: $arg (supported: --vendor-only, --vercel-standby)" >&2; exit 1 ;;
     esac
 done
+
+# Refuse the Vercel deploy phase unless explicitly asked (EC2 is production;
+# Vercel is paused). --vendor-only never reaches DEPLOY, so it stays allowed.
+if [[ "$VENDOR_ONLY" != "true" && "$VERCEL_STANDBY" != "true" ]]; then
+    echo "[REFUSED] production deploys use hosted-server/ec2/deploy-ec2.sh" >&2
+    echo "          (Vercel project is paused; EC2 serves mcp.novada.com since 2026-10-29)." >&2
+    echo "          For build + vendor + gates only: $0 --vendor-only" >&2
+    echo "          To force the legacy Vercel deploy: $0 --vercel-standby" >&2
+    exit 2
+fi
 
 set -euo pipefail
 
@@ -198,6 +218,8 @@ fi
 
 # ─── PHASE 4: DEPLOY ──────────────────────────────────────────────────────────
 banner "phase: DEPLOY  (from repo root — avoids /vercel/vercel path bug)"
+
+[[ "$VERCEL_STANDBY" == "true" ]] || abort "Vercel deploy requires --vercel-standby (production deploys use hosted-server/ec2/deploy-ec2.sh)"
 
 cd "$SRV"   # MUST deploy from repo root, not vercel/
 
