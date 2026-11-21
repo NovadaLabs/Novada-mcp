@@ -59,7 +59,7 @@ Release checklist (patch releases; `scripts/promote-to-public.sh` predates the m
 2. `cd npm-package && npm version X.Y.Z --no-git-tag-version` (package.json + lock), then `npm run build` (regenerates `server.json`).
 3. `node distribution/generate.mjs` (plugin manifests) and `node npm-package/scripts/gen-update-log.mjs`, then `node distribution/check.mjs` must pass.
 4. Open a PR, wait for CI, merge, tag `vX.Y.Z` on the merge commit, create the GitHub Release from the CHANGELOG section.
-5. `cd npm-package && npm publish` (owner only — **REDLINE: explicit owner approval**), then `hosted-server/scripts/deploy-hosted.sh` to ship the same build to `mcp.novada.com`.
+5. `cd npm-package && npm publish` (owner only — **REDLINE: explicit owner approval**), then re-vendor with `hosted-server/scripts/deploy-hosted.sh --vendor-only`, commit, and ship the same build to `mcp.novada.com` with `hosted-server/ec2/deploy-ec2.sh` (production deploy — owner approval).
 
 npm versions are immutable, so a mistake means a new number, never a republish. Full rules for agents and teammates: **[AGENTS.md](./AGENTS.md)**.
 
