@@ -54,10 +54,11 @@
  *      the CI runner) gets ONE retry with a short backoff before being
  *      classified (see callToolWithNetworkRetry) — a transient runner hiccup
  *      must not misclassify as an ours-domain regression.
- *   4. `novada_proxy_account_create` is called WITHOUT `confirm` — this
- *      returns a dry-run confirmation preview (no write, no backend hit) and
- *      counts as a PASS. assertExecutable is ARGS-aware: it blocks this tool
- *      only when `confirm:true` is present, and blocks every other
+ *   4. `novada_proxy_account_create` is called WITHOUT `approval_token` — this
+ *      returns a confirmation preview (no write, no backend hit) and counts as
+ *      a PASS; `novada_static_ip_mgmt` is called with `action:"list"` only.
+ *      assertExecutable is ARGS-aware via WRITE_GUARD_CARVE_OUTS (per-tool key
+ *      allowlists, fail closed) and blocks every other
  *      NEVER_EXECUTE_TOOL_NAMES member unconditionally by name. Every
  *      dispatch is wrapped in a try/catch so a write-guard throw classifies
  *      just THAT probe as an ours-domain error row instead of crashing the
@@ -213,7 +214,6 @@ const MANY_TOOLS_THRESHOLD = 4;
 //   yandex  : web_search              -> yandex
 //   amazon  : products_by_keywords    -> amazon_product_keywords
 //   walmart : product_by_keyword      -> walmart_product_keywords
-//   shein   : product_by_id           -> shein_product_id
 //   x       : profile_by_username     -> twitter_profile_username
 //   tiktok  : profile_by_url          -> tiktok_profiles_url
 //   instagram: profile_by_username    -> ins_profiles_username
@@ -223,7 +223,7 @@ const MANY_TOOLS_THRESHOLD = 4;
 //   github  : repository_by_url       -> github_repository_repo-url
 //   perplexity: answer_by_search_term -> perplexity_answer_searchterm
 const PROBES = Object.freeze([
-  // ── meta / content / browser / proxy (free or cheap, read-only / dry-run) ──
+  // ── meta / content / proxy / static-ip (free or cheap, read-only / dry-run) ──
   { name: "novada_setup", platform: "-", operation: "-", catalogOpId: "-", args: {}, timeoutMs: 30000, isScraper: false },
   { name: "novada_discover", platform: "-", operation: "-", catalogOpId: "-", args: {}, timeoutMs: 30000, isScraper: false },
   { name: "novada_account", platform: "-", operation: "-", catalogOpId: "-", args: { section: "balance" }, timeoutMs: 30000, isScraper: false },
@@ -234,27 +234,19 @@ const PROBES = Object.freeze([
   { name: "novada_monitor", platform: "https://example.com", operation: "-", catalogOpId: "-", args: { url: "https://example.com" }, timeoutMs: 45000, isScraper: false },
   { name: "novada_ai_monitor", platform: "novada", operation: "-", catalogOpId: "-", args: { brand: "novada" }, timeoutMs: 60000, isScraper: false },
   { name: "novada_research", platform: "-", operation: "-", catalogOpId: "-", args: { query: "what is anthropic", depth: "quick" }, timeoutMs: 150000, isScraper: false },
-  {
-    name: "novada_browser",
-    platform: "https://example.com",
-    operation: "-",
-    catalogOpId: "-",
-    args: {
-      actions: [
-        { action: "navigate", url: "https://example.com", wait_until: "domcontentloaded" },
-        { action: "aria_snapshot" },
-      ],
-    },
-    timeoutMs: 90000,
-    isScraper: false,
-  },
+  // novada_browser removed 2026-11-25: not served on hosted (mcp.ts HOSTED_HIDDEN,
+  // 2026-10 connector review — see config/surfaces.json). novada_scrape_shein
+  // removed likewise (tool deleted 2026-10-13, zero working ops).
   { name: "novada_proxy", platform: "-", operation: "-", catalogOpId: "-", args: {}, timeoutMs: 30000, isScraper: false },
   { name: "novada_proxy_account_list", platform: "-", operation: "-", catalogOpId: "-", args: { product: "1" }, timeoutMs: 30000, isScraper: false },
-  // NO `confirm` — this MUST stay a dry-run preview call. See assertExecutable
-  // below: this specific (name, no-confirm) combination is the one carve-out
-  // from NEVER_EXECUTE_TOOL_NAMES; `confirm:true` is still hard-blocked no
-  // matter what.
+  // NO `approval_token` — this MUST stay a preview call. See
+  // WRITE_GUARD_CARVE_OUTS below: only the creation fields are allowed;
+  // approval_token (the real write trigger) and confirm are hard-blocked.
   { name: "novada_proxy_account_create", platform: "-", operation: "-", catalogOpId: "-", args: { product: "1", account: "probe_ro", password: "placeholder1234" }, timeoutMs: 30000, isScraper: false },
+  // READ-ONLY `action:"list"` ONLY — see WRITE_GUARD_CARVE_OUTS: every other
+  // action (open/renew = billable writes, reveal_credentials, export) and any
+  // approval_token is hard-refused by assertExecutable.
+  { name: "novada_static_ip_mgmt", platform: "-", operation: "list", catalogOpId: "-", args: { action: "list", limit: 1 }, timeoutMs: 30000, isScraper: false },
 
   // ── generic scrape dispatch (takes the CATALOG scraper id directly) ──────
   // V3-N1/C-2 fix (2026-09-03): every isScraper:true probe below now
@@ -277,10 +269,9 @@ const PROBES = Object.freeze([
   { name: "novada_scrape_google", platform: "google.com", operation: "web_search", catalogOpId: "google_search", args: { operation: "web_search", params: { q: "anthropic claude", num: 1 }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "google.com" },
   { name: "novada_scrape_bing", platform: "bing.com", operation: "web_search", catalogOpId: "bing_search", args: { operation: "web_search", params: { q: "anthropic claude" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "bing.com" },
   { name: "novada_scrape_duckduckgo", platform: "duckduckgo.com", operation: "web_search", catalogOpId: "duckduckgo", args: { operation: "web_search", params: { q: "anthropic claude" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "duckduckgo.com" },
-  { name: "novada_scrape_yandex", platform: "yandex.com", operation: "web_search", catalogOpId: "yandex", args: { operation: "web_search", params: { q: "anthropic", yandex_domain: "yandex.com" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "yandex.com" },
+  { name: "novada_scrape_yandex", platform: "yandex.com", operation: "web_search", catalogOpId: "yandex", args: { operation: "web_search", params: { q: "anthropic", yandex_domain: "yandex.ru" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "yandex.com" },
   { name: "novada_scrape_amazon", platform: "amazon.com", operation: "products_by_keywords", catalogOpId: "amazon_product_keywords", args: { operation: "products_by_keywords", params: { keyword: "wireless earbuds" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "amazon.com" },
   { name: "novada_scrape_walmart", platform: "walmart.com", operation: "product_by_keyword", catalogOpId: "walmart_product_keywords", args: { operation: "product_by_keyword", params: { domain: "https://www.walmart.com/", keyword: "shoes" }, limit: 1, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "walmart.com" },
-  { name: "novada_scrape_shein", platform: "shein.com", operation: "product_by_id", catalogOpId: "shein_product_id", args: { operation: "product_by_id", params: { ID: "Tween-Girls-Casual-Solid-Color-Criss-Cross-Racerback-Sports-Dress-Kids-p-423721658" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "shein.com" },
   { name: "novada_scrape_x", platform: "x.com", operation: "profile_by_username", catalogOpId: "twitter_profile_username", args: { operation: "profile_by_username", params: { user_name: "BillGates" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "x.com" },
   { name: "novada_scrape_tiktok", platform: "tiktok.com", operation: "profile_by_url", catalogOpId: "tiktok_profiles_url", args: { operation: "profile_by_url", params: { url: "https://www.tiktok.com/@tiktok" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "tiktok.com" },
   { name: "novada_scrape_instagram", platform: "instagram.com", operation: "profile_by_username", catalogOpId: "ins_profiles_username", args: { operation: "profile_by_username", params: { username: "instagram" }, format: "json" }, timeoutMs: 60000, isScraper: true, resumePlatform: "instagram.com" },
@@ -391,7 +382,6 @@ const SUBSTANCE_TABLE = Object.freeze({
   // field before this script ever sees the record). ──────────────────────
   amazon_product_keywords: { label: "product listing", groups: [[...TITLE_FIELDS, ...PRICE_FIELDS]] },
   walmart_product_keywords: { label: "product listing", groups: [[...TITLE_FIELDS, ...PRICE_FIELDS]] },
-  shein_product_id: { label: "product listing", groups: [[...TITLE_FIELDS, ...PRICE_FIELDS]] },
 
   // ── profile family: a real profile always carries a username/handle. ───
   twitter_profile_username: { label: "profile", groups: [USERNAME_FIELDS] },
@@ -493,14 +483,40 @@ function isoForFilename(date) {
 }
 
 /**
- * Refuse (hard throw) to execute a write-tool — UNLESS it is
- * `novada_proxy_account_create` called WITHOUT `confirm:true`, which is a
- * verified no-op dry-run preview (see
- * npm-package/src/tools/proxy_account_create.ts:99 —
- * `if (params.confirm !== true) { return JSON.stringify({ status:
- * "confirmation_required", ... }) }`, no API call is made in that branch).
- * That tool name is deliberately ALSO listed in NEVER_EXECUTE_TOOL_NAMES
- * (correctly — a REAL confirm:true call must always be blocked); this
+ * Read-only carve-outs from NEVER_EXECUTE_TOOL_NAMES, keyed by tool name.
+ * `allows(args)` must return true ONLY for a verified no-write call shape.
+ *   - novada_proxy_account_create: only its creation fields (product/account/
+ *     password/status/remark/limit_flow) and NO approval_token => the tool
+ *     returns a confirmation_required preview, no API call. Since 2026-09 the
+ *     write is authorized by `approval_token` (a server-signed token the
+ *     preview itself hands back), NOT by `confirm` (deprecated, ignored) —
+ *     both are outside the allowlist, so neither can reach the API.
+ *   - novada_static_ip_mgmt: exactly `action:"list"` (+ optional page/limit/
+ *     status/region/key_word filters) and NO approval_token — open/renew are
+ *     billable writes, reveal_credentials returns real credentials, export is
+ *     not needed for a health probe. Unknown keys fail closed.
+ */
+const PROXY_ACCOUNT_PREVIEW_ALLOWED_KEYS = new Set(["product", "account", "password", "status", "remark", "limit_flow"]);
+const STATIC_IP_LIST_ALLOWED_KEYS = new Set(["action", "page", "limit", "status", "region", "key_word"]);
+const WRITE_GUARD_CARVE_OUTS = Object.freeze({
+  novada_proxy_account_create: Object.freeze({
+    why: "preview only: creation fields allowed, approval_token/confirm/unknown keys refused",
+    allows: (args) => Object.keys(args).every((k) => PROXY_ACCOUNT_PREVIEW_ALLOWED_KEYS.has(k)),
+  }),
+  novada_static_ip_mgmt: Object.freeze({
+    why: 'action:"list" only, no approval_token, no unknown keys',
+    allows: (args) =>
+      args.action === "list" && Object.keys(args).every((k) => STATIC_IP_LIST_ALLOWED_KEYS.has(k)),
+  }),
+});
+
+/**
+ * Refuse (hard throw) to execute a write-tool — UNLESS its args match that
+ * tool's row in WRITE_GUARD_CARVE_OUTS (e.g. `novada_proxy_account_create`
+ * WITHOUT `approval_token`, which returns a `confirmation_required` preview
+ * and makes no API call — see proxy_account_create.ts's approval-token gate).
+ * Those tool names are deliberately ALSO listed in NEVER_EXECUTE_TOOL_NAMES
+ * (correctly — a REAL write call must always be blocked); this
  * function is what reconciles "the tool name is on the never-execute list"
  * with "this specific PROBE call is a safe read-only preview", by
  * inspecting ARGS, not just the name.
@@ -513,15 +529,21 @@ function isoForFilename(date) {
  * try/catch (see runProbe / preflightAssertAllProbesExecutable) so a throw
  * here never crashes more than the one probe that triggered it.
  *
+ * 2026-11-25: the carve-outs are a TABLE (WRITE_GUARD_CARVE_OUTS below), one
+ * row per never-execute tool that has a verified read-only call shape —
+ * extending it is a new row, never a new branch. Each row is an ALLOWLIST
+ * predicate over args (fail closed: anything not explicitly allowed throws).
+ *
  * @param {string} toolName
  * @param {Record<string, unknown>} [args]
  */
 function assertExecutable(toolName, args = {}) {
-  if (toolName === "novada_proxy_account_create") {
-    if (args?.confirm === true) {
-      throw new Error(`[full-tools-probe] REFUSING to execute "${toolName}" with confirm:true — this is a hard safety invariant.`);
+  const carveOut = WRITE_GUARD_CARVE_OUTS[toolName];
+  if (carveOut) {
+    if (!carveOut.allows(args ?? {})) {
+      throw new Error(`[full-tools-probe] REFUSING to execute "${toolName}" with args outside its read-only carve-out (${carveOut.why}) — this is a hard safety invariant.`);
     }
-    return; // no confirm:true => verified no-op preview, safe to call
+    return;
   }
   if (NEVER_EXECUTE_TOOL_NAMES.has(toolName)) {
     throw new Error(

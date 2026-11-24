@@ -50,6 +50,7 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Counter } from "k6/metrics";
+import { parseJsonRpcBody } from "./jsonrpc-body.mjs";
 
 // 429 (rate-limited) is an EXPECTED, correctly-shed response at this VU
 // count — see the file-header Scope note. Registering it here means k6's
@@ -136,38 +137,6 @@ const EXTRACT_URL = "https://example.com";
 // ---------------------------------------------------------------------------
 
 /**
- * Extracts a parsed JSON-RPC object from a response body that may be either
- * plain JSON or an SSE stream (one or more "data: {...}" frames).
- */
-function parseJsonRpcBody(body) {
-  if (!body) {
-    return null;
-  }
-
-  if (body.indexOf("data:") !== -1) {
-    const lines = body.split("\n");
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.indexOf("data:") === 0) {
-        const jsonStr = trimmed.slice(5).trim();
-        try {
-          return JSON.parse(jsonStr);
-        } catch (e) {
-          // keep scanning subsequent frames
-        }
-      }
-    }
-    return null;
-  }
-
-  try {
-    return JSON.parse(body);
-  } catch (e) {
-    return null;
-  }
-}
-
-/**
  * POSTs a single JSON-RPC "tools/call" request, tagged by tool name so k6's
  * summary breaks out per-tool latency (http_req_duration{tool:"..."}).
  */
@@ -191,7 +160,7 @@ function callTool(toolName, args, tag) {
     tags: { tool: tag },
   });
 
-  const parsed = parseJsonRpcBody(res.body);
+  const parsed = parseJsonRpcBody(res.body, res.headers["Content-Type"]);
 
   check(
     res,

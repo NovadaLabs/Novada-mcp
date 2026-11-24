@@ -72,6 +72,10 @@ Run locally (requires [k6](https://k6.io/docs/get-started/installation/) install
 NOVADA_TEST_KEY=<key> k6 run monitoring/stress/k6-stress.js
 ```
 
+The response parser lives in `monitoring/stress/jsonrpc-body.mjs` (shared by k6
+and node). After changing it, run the offline self-test:
+`node monitoring/stress/jsonrpc-body.selftest.mjs`.
+
 ## Layer D — daily full-tools probe (this repo)
 
 `monitoring/smoke/full-tools-probe.mjs` (dependency-free Node ≥20) +
@@ -174,7 +178,7 @@ error text — must **never** be public. Three things enforce that:
    both read `MONITOR_QUIET` — the CI workflow sets it to `"1"` on both the
    Layer B and Layer D probe steps. In quiet mode, stdout is reduced to a
    single non-revealing completion line (e.g. `[full-tools-probe] complete:
-   30 probed, exit 0`) — no tool names, domains, backend names, or severity
+   29 probed, exit 0`) — no tool names, domains, backend names, or severity
    breakdown. The full per-tool detail is unaffected in the JSON report
    file; only what a human reading the public Actions log sees is reduced.
    Local/manual runs leave `MONITOR_QUIET` unset and get the full
