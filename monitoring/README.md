@@ -97,6 +97,19 @@ python3 monitoring/report/render-report.py   # renders the latest monitoring/rep
 optionally `MCP_URL`/`SMOKE_SLOW_MS`/`SMOKE_DELAY_MS` — never commit that file
 or its contents; it is outside this repo.)
 
+### DingTalk summary of the daily run
+
+`monitoring/report/run-daily-report.sh` (the local daily job) ends by calling
+`monitoring/report/notify-dingtalk-layer-d.mjs <report.json>`, which posts one
+summary — healthy/total, failures split 我方 / 网关·配置 / 上游, missing tools,
+and up to 15 failure lines — to the same DingTalk robot as the alerting layer.
+It is **off until configured**: add `DINGTALK_WEBHOOK_URL` (plus
+`DINGTALK_SECRET` / `DINGTALK_KEYWORD` if the robot uses 加签 / keywords) to
+`~/.novada/monitor.env`. Unset → it logs a skip and exits 0; a failed send is
+logged and never fails the daily job. Preview without sending:
+`DRY_RUN=1 node monitoring/report/notify-dingtalk-layer-d.mjs monitoring/reports/<full-….json>`.
+Offline self-test: `node monitoring/report/notify-dingtalk-layer-d.selftest.mjs`.
+
 ### Processing → poll disambiguation
 
 Some scraper platforms (Amazon, Walmart, TikTok, X, SHEIN, Perplexity, …) are
