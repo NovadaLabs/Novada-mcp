@@ -6,6 +6,7 @@ Web search, page extraction and structured platform data for AI agents, backed b
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![CI](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![NovadaLabs/novada-mcp MCP server](https://glama.ai/mcp/servers/NovadaLabs/novada-mcp/badges/score.svg)](https://glama.ai/mcp/servers/NovadaLabs/novada-mcp)
 
 [![Free to start — $10 in free credits, usage billed to your Novada account, no credit card needed](docs/assets/free-credits-banner.png)](https://www.novada.com)
 

@@ -82,5 +82,25 @@ mkdir -p "$(dirname "${XLSX_PATH}")"
 # a minimal launchd PATH resolves (e.g. homebrew's python3 lacks it here). The
 # launchd plist sets PYTHON to the interpreter that has openpyxl; interactive
 # runs fall back to bare python3. Keeps this script portable (no hardcoded path).
+# Exit code captured (not set -e) so the DingTalk summary below still goes
+# out on the day the local Excel step breaks; this job still exits with it.
+set +e
 "${PYTHON:-python3}" monitoring/report/append-daily-sheet.py "${NEWEST_JSON}" "${XLSX_PATH}"
+XLSX_EXIT=$?
+set -e
+
+# ── Optional: one DingTalk summary of this run (2026-11-25) ─────────────────
+# The DingTalk daily report (GitHub Actions, monitoring/dingtalk) only covers 6
+# tools; this posts the full Layer D picture. Needs DINGTALK_WEBHOOK_URL (and
+# DINGTALK_SECRET / DINGTALK_KEYWORD) in ${ENV_FILE}, already sourced above —
+# skipped cleanly when unset. Never fatal: the Excel sheet is the primary record.
+set +e
+node monitoring/report/notify-dingtalk-layer-d.mjs "${NEWEST_JSON}"
+NOTIFY_EXIT=$?
+set -e
+echo "[run-daily-report] dingtalk notify exit code: ${NOTIFY_EXIT} (informational only — not fatal to this job)"
+if [ "${XLSX_EXIT}" -ne 0 ]; then
+  echo "[run-daily-report] FATAL: Excel append failed (exit ${XLSX_EXIT}); the DingTalk summary was still attempted above." >&2
+  exit "${XLSX_EXIT}"
+fi
 echo "[run-daily-report] done -> ${XLSX_PATH}"

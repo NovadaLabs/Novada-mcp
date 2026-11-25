@@ -72,6 +72,10 @@ Run locally (requires [k6](https://k6.io/docs/get-started/installation/) install
 NOVADA_TEST_KEY=<key> k6 run monitoring/stress/k6-stress.js
 ```
 
+The response parser lives in `monitoring/stress/jsonrpc-body.mjs` (shared by k6
+and node). After changing it, run the offline self-test:
+`node monitoring/stress/jsonrpc-body.selftest.mjs`.
+
 ## Layer D — daily full-tools probe (this repo)
 
 `monitoring/smoke/full-tools-probe.mjs` (dependency-free Node ≥20) +
@@ -96,6 +100,19 @@ python3 monitoring/report/render-report.py   # renders the latest monitoring/rep
 (`~/.novada/monitor.env` is expected to export `NOVADA_TEST_KEY`, and
 optionally `MCP_URL`/`SMOKE_SLOW_MS`/`SMOKE_DELAY_MS` — never commit that file
 or its contents; it is outside this repo.)
+
+### DingTalk summary of the daily run
+
+`monitoring/report/run-daily-report.sh` (the local daily job) ends by calling
+`monitoring/report/notify-dingtalk-layer-d.mjs <report.json>`, which posts one
+summary — healthy/total, failures split 我方 / 网关·配置 / 上游, missing tools,
+and up to 15 failure lines — to the same DingTalk robot as the alerting layer.
+It is **off until configured**: add `DINGTALK_WEBHOOK_URL` (plus
+`DINGTALK_SECRET` / `DINGTALK_KEYWORD` if the robot uses 加签 / keywords) to
+`~/.novada/monitor.env`. Unset → it logs a skip and exits 0; a failed send is
+logged and never fails the daily job. Preview without sending:
+`DRY_RUN=1 node monitoring/report/notify-dingtalk-layer-d.mjs monitoring/reports/<full-….json>`.
+Offline self-test: `node monitoring/report/notify-dingtalk-layer-d.selftest.mjs`.
 
 ### Processing → poll disambiguation
 
@@ -174,7 +191,7 @@ error text — must **never** be public. Three things enforce that:
    both read `MONITOR_QUIET` — the CI workflow sets it to `"1"` on both the
    Layer B and Layer D probe steps. In quiet mode, stdout is reduced to a
    single non-revealing completion line (e.g. `[full-tools-probe] complete:
-   30 probed, exit 0`) — no tool names, domains, backend names, or severity
+   29 probed, exit 0`) — no tool names, domains, backend names, or severity
    breakdown. The full per-tool detail is unaffected in the JSON report
    file; only what a human reading the public Actions log sees is reduced.
    Local/manual runs leave `MONITOR_QUIET` unset and get the full

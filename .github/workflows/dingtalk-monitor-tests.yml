@@ -20,6 +20,7 @@ on:
       - ".github/workflows/dingtalk-monitor-tests.yml"
       - "hosted-server/scripts/golden/baseline/**"
       - "npm-package/src/config.ts"
+      - "monitoring/report/notify-dingtalk-layer-d*.mjs"
   pull_request:
     branches: [main]
     paths:
@@ -28,6 +29,7 @@ on:
       - ".github/workflows/dingtalk-monitor-tests.yml"
       - "hosted-server/scripts/golden/baseline/**"
       - "npm-package/src/config.ts"
+      - "monitoring/report/notify-dingtalk-layer-d*.mjs"
   workflow_dispatch: {}
 
 permissions:
@@ -46,3 +48,9 @@ jobs:
 
       - name: Test (node --test monitoring/dingtalk)
         run: node --test monitoring/dingtalk/*.test.mjs
+
+      # Layer D → DingTalk summary (monitoring/report/notify-dingtalk-layer-d.mjs)
+      # reuses send.mjs, so a send.mjs change must re-run its offline self-test.
+      - name: Self-test — Layer D DingTalk summary
+        if: ${{ !cancelled() }}
+        run: node monitoring/report/notify-dingtalk-layer-d.selftest.mjs

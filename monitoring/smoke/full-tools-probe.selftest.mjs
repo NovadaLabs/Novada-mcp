@@ -81,8 +81,11 @@
  * must never crash").
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   PROBES,
+  assertExecutable,
   runAllProbes,
   preflightAssertAllProbesExecutable,
   adviceFor,
@@ -270,15 +273,17 @@ function stubCallTool(name, args) {
         error: null,
       });
 
-    case "novada_scrape_shein":
+    case "novada_scrape_x":
       // Scenario 6: "processing" wording matched but NO task_id="..." is
       // present anywhere — simulates our extraction/format assumption
-      // breaking. Must classify ①, must NOT attempt to poll.
+      // breaking. Must classify ①, must NOT attempt to poll. (Moved from
+      // novada_scrape_shein 2026-11-25 — shein is no longer a hosted tool;
+      // x is likewise a KNOWN-FLAKY platform, so the scenario is unchanged.)
       return Promise.resolve({
         ok: true,
         httpStatus: 200,
         timeMs: 900,
-        text: "## Scrape Results\nplatform: shein.com | operation: product_by_id | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running after 45s (no task id echoed).",
+        text: "## Scrape Results\nplatform: x.com | operation: profile_by_username | records: 0 | source: live\n\nstatus: processing\n⏳ Task still running after 45s (no task id echoed).",
         error: null,
       });
 
@@ -405,6 +410,67 @@ async function main() {
     `preflightAssertAllProbesExecutable() does not throw for the real PROBES list${preflightThrew ? ` (threw: ${preflightThrew.message})` : ""}`
   );
 
+  // ── 2026-11-25: PROBES must cover EXACTLY the live hosted surface ──────────
+  // config/surfaces.json "hosted" is the checked-in hosted tool contract
+  // (scripts/check-hosted-drift.mjs gates it as an exact set match against
+  // mcp.ts's derived TOOLS). A PROBE for a tool hosted no longer serves
+  // (novada_browser / novada_scrape_shein, until 2026-11-25) made every daily
+  // run red with a phantom MISSING P0; a hosted tool with no PROBE
+  // (novada_static_ip_mgmt) was silently never tested. Both directions fail here.
+  console.log("\n[selftest] PROBES names === config/surfaces.json hosted surface...");
+  const surfacesPath = fileURLToPath(new URL("../../config/surfaces.json", import.meta.url));
+  const hostedTools = JSON.parse(readFileSync(surfacesPath, "utf8")).surfaces.hosted.tools;
+  const probeNames = new Set(PROBES.map((p) => p.name));
+  const hostedSet = new Set(hostedTools);
+  const staleProbes = [...probeNames].filter((n) => !hostedSet.has(n));
+  const uncovered = hostedTools.filter((n) => !probeNames.has(n));
+  expect(staleProbes.length === 0, `no PROBE for a tool hosted does not serve (stale: ${JSON.stringify(staleProbes)})`);
+  expect(uncovered.length === 0, `every hosted tool has a PROBE (uncovered: ${JSON.stringify(uncovered)})`);
+  expect(probeNames.size === PROBES.length, `PROBES has no duplicate names (${PROBES.length} entries, ${probeNames.size} unique)`);
+  // Layer B's drift baseline is the SAME class of inventory list (all-tools-smoke
+  // flags a baseline tool missing from live as a REGRESSION) — it held the same
+  // stale browser/shein pair from 2026-07-23 until 2026-11-25. Pin it too.
+  const baselinePath = fileURLToPath(new URL("./baseline-tools.json", import.meta.url));
+  const baselineTools = JSON.parse(readFileSync(baselinePath, "utf8")).tools;
+  const baselineSorted = JSON.stringify([...baselineTools].sort());
+  expect(
+    baselineSorted === JSON.stringify([...hostedTools].sort()),
+    `monitoring/smoke/baseline-tools.json tools === config/surfaces.json hosted (baseline ${baselineTools.length}, hosted ${hostedTools.length})`
+  );
+
+  // ── 2026-11-25: write-guard carve-out table — allowlist, fail closed ───────
+  console.log("\n[selftest] assertExecutable carve-outs (read-only shapes pass, everything else throws)...");
+  const guardCases = [
+    { name: "novada_static_ip_mgmt", args: { action: "list", limit: 1 }, allowed: true },
+    { name: "novada_static_ip_mgmt", args: { action: "list", page: 2, limit: 5, status: "1", region: "us", key_word: "x" }, allowed: true },
+    { name: "novada_static_ip_mgmt", args: { action: "open", ip_type: "normal" }, allowed: false },
+    { name: "novada_static_ip_mgmt", args: { action: "renew" }, allowed: false },
+    { name: "novada_static_ip_mgmt", args: { action: "reveal_credentials" }, allowed: false },
+    { name: "novada_static_ip_mgmt", args: { action: "export" }, allowed: false },
+    { name: "novada_static_ip_mgmt", args: { action: "list", approval_token: "t" }, allowed: false },
+    { name: "novada_static_ip_mgmt", args: { action: "list", confirm: true }, allowed: false },
+    { name: "novada_static_ip_mgmt", args: {}, allowed: false },
+    { name: "novada_proxy_account_create", args: { product: "1", account: "a", password: "p" }, allowed: true },
+    { name: "novada_proxy_account_create", args: { product: "1", account: "a", password: "p", status: "1", remark: "r", limit_flow: "10" }, allowed: true },
+    { name: "novada_proxy_account_create", args: { product: "1", confirm: true }, allowed: false },
+    { name: "novada_proxy_account_create", args: { product: "1", confirm: false }, allowed: false },
+    // review F1 (2026-11-25): approval_token is the REAL write trigger since 2026-09 — must be refused
+    { name: "novada_proxy_account_create", args: { product: "1", account: "a", password: "p", approval_token: "t" }, allowed: false },
+    { name: "novada_proxy_account_create", args: { product: "1", unknown_key: 1 }, allowed: false },
+    { name: "novada_ip_whitelist", args: { action: "list" }, allowed: false },
+    { name: "novada_capture_apikey", args: {}, allowed: false },
+    { name: "novada_setup", args: {}, allowed: true },
+  ];
+  for (const c of guardCases) {
+    let threw = false;
+    try {
+      assertExecutable(c.name, c.args);
+    } catch {
+      threw = true;
+    }
+    expect(threw === !c.allowed, `assertExecutable(${c.name}, ${JSON.stringify(c.args)}) ${c.allowed ? "allowed" : "refused"} (threw=${threw})`);
+  }
+
   console.log("\n[selftest] running the full pipeline (runAllProbes) against a stubbed, offline callTool/listTools...");
   const { results } = await runAllProbes(PROBES, {
     callToolFn: stubCallTool,
@@ -440,7 +506,7 @@ async function main() {
     { name: "novada_scrape_linkedin", status: "ASYNC", domain: "-", severity: null, why: "TOW2-257 fixture (b): processing → stays processing on EVERY resume attempt (non-flaky platform) → exhausts all 4 attempts → ASYNC, NOT a ③-backend FAIL (the whole point of Phase 4: kills the recurring false daily red)" },
     { name: "novada_scrape_github", status: "ASYNC", domain: "-", severity: null, why: "TOW2-257 fixture (b), same as linkedin but on a KNOWN-FLAKY platform (github) — flakiness must NOT change the outcome: still-processing-after-all-attempts is ASYNC regardless of platform" },
     { name: "novada_scrape_tiktok", status: "FAIL", domain: "③-backend", severity: "P2", why: "TOW2-257 fixture (c): processing on attempt 1, resumes to a genuine Failed outcome (520) on attempt 2 — must stop IMMEDIATELY as ③-backend FAIL, not wait out the remaining attempts" },
-    { name: "novada_scrape_shein", status: "FAIL", domain: "①-mcp-code", severity: "P1", why: 'processing matched but no task_id extracted (HIGH fix: must be ①, not ③)' },
+    { name: "novada_scrape_x", status: "FAIL", domain: "①-mcp-code", severity: "P1", why: 'processing matched but no task_id extracted (HIGH fix: must be ①, not ③)' },
     { name: "novada_map", status: "FAIL", domain: "①-mcp-code", severity: "P1", why: "our own validation error (INVALID_PARAMS)" },
     { name: "novada_scrape_facebook", status: "FAIL", domain: "②-gateway", severity: "P1", why: "an INVALID_API_KEY auth error (MEDIUM fix: must be ②/config, not ①)" },
     { name: "novada_extract", status: "PASS", domain: "-", severity: null, why: "httpStatus 0 non-timeout on attempt 1, retry recovers" },
@@ -552,7 +618,7 @@ async function main() {
   // main()'s exit gate / escalation / oursCount all exclude them, so a bad key
   // can never cry-wolf a red wall. This is the ratchet for that behavior: the
   // three test-key scenarios must carry configFault:true and be EXCLUDED from
-  // oursP0P1; the real ours-faults (map ①, shein ①, instagram ②-network) must
+  // oursP0P1; the real ours-faults (map ①, x ①, instagram ②-network) must
   // NOT be configFault and MUST still be in oursP0P1 (real bugs still page).
   console.log("");
   const testKeyRows = ["novada_scrape_facebook", "novada_search", "novada_scrape_yandex"].map((n) => byName[n]);
@@ -565,7 +631,7 @@ async function main() {
       `${r.name}: EXCLUDED from oursP0P1 — a test-key fault must never fail the run`
     );
   }
-  const realOursRows = ["novada_map", "novada_scrape_shein", "novada_scrape_instagram"].map((n) => byName[n]);
+  const realOursRows = ["novada_map", "novada_scrape_x", "novada_scrape_instagram"].map((n) => byName[n]);
   for (const r of realOursRows) {
     expect(Boolean(r), `${r?.name ?? "?"}: row present for real-ours check`);
     if (!r) continue;
@@ -586,7 +652,7 @@ async function main() {
   // The configFault P0 (novada_search free-cap) must NOT become the aggregate
   // severity headline that linear-sync uses for alert-vs-heartbeat — else a
   // dead key just relocates the cry-wolf from the Actions exit code to a daily
-  // phantom-P0 Linear alert. The real ours-faults (map/shein/instagram, all
+  // phantom-P0 Linear alert. The real ours-faults (map/x/instagram, all
   // P1) are the worst NON-configFault severity, so both headlines are P1.
   expect(
     summary.maxOursSeverity === "P1",
