@@ -28,7 +28,11 @@ import { readFileSync } from "node:fs";
 import { sendDingTalk } from "../dingtalk/send.mjs";
 
 export const MAX_FAILURE_LINES = 15;
+export const SEND_TIMEOUT_MS = 15_000;
 const MAX_ERROR_CHARS = 90;
+// Env values that must never reach the group chat, masked by exact value
+// (review D4: a length heuristic alone misses short keys).
+const SECRET_ENV_VARS = ["NOVADA_TEST_KEY", "NOVADA_API_KEY", "DINGTALK_SECRET", "DINGTALK_WEBHOOK_URL"];
 
 const DOMAIN_LABEL = Object.freeze({
   "①-mcp-code": "我方",
@@ -37,18 +41,31 @@ const DOMAIN_LABEL = Object.freeze({
 });
 const DOMAIN_ORDER = ["①-mcp-code", "②-gateway", "③-backend"];
 
-/** First line of an error, long token-like strings masked, length-capped. */
-function shortError(err) {
-  const first = String(err ?? "").split("\n")[0].trim();
-  const masked = first.replace(/[A-Za-z0-9_-]{32,}/g, "<redacted>");
+/**
+ * First line of an error, known secret values and long token-like runs
+ * masked, length-capped. The heuristic is letters+digits only (no "_"/"-"),
+ * so snake_case identifiers such as linkedin_company_information_url survive.
+ */
+function shortError(err, knownSecrets = []) {
+  let first = String(err ?? "").split("\n")[0].trim();
+  for (const v of knownSecrets) {
+    if (typeof v === "string" && v.length >= 8) first = first.split(v).join("<redacted>");
+  }
+  const masked = first.replace(/[A-Za-z0-9]{32,}/g, "<redacted>");
   return masked.length > MAX_ERROR_CHARS ? `${masked.slice(0, MAX_ERROR_CHARS - 1)}…` : masked;
+}
+
+/** fetch with a hard timeout (review D3: an unbounded fetch could stall the daily job). */
+export function withTimeout(fetchImpl, ms = SEND_TIMEOUT_MS) {
+  return (url, init = {}) => fetchImpl(url, { ...init, signal: AbortSignal.timeout(ms) });
 }
 
 /**
  * @param {{finishedAt?: string, startedAt?: string, results?: object[], summary?: object}} report
+ * @param {{knownSecrets?: string[]}} [opts]
  * @returns {{title: string, text: string}}
  */
-export function buildLayerDMessage(report) {
+export function buildLayerDMessage(report, { knownSecrets = [] } = {}) {
   const results = Array.isArray(report?.results) ? report.results : [];
   const summary = report?.summary ?? {};
   const date = String(report?.finishedAt || report?.startedAt || "").slice(0, 10) || "unknown-date";
@@ -82,7 +99,7 @@ export function buildLayerDMessage(report) {
     lines.push("", "**失败明细**");
     for (const r of sorted.slice(0, MAX_FAILURE_LINES)) {
       const label = DOMAIN_LABEL[r.domain] ?? "未分类";
-      lines.push(`- ${r.name} — ${label}${r.severity ? ` ${r.severity}` : ""} · ${shortError(r.error)}`);
+      lines.push(`- ${r.name} — ${label}${r.severity ? ` ${r.severity}` : ""} · ${shortError(r.error, knownSecrets)}`);
     }
     if (sorted.length > MAX_FAILURE_LINES) {
       lines.push(`- …另有 ${sorted.length - MAX_FAILURE_LINES} 项，见本地 Excel 日报`);
@@ -115,7 +132,8 @@ export async function main(argv, env, deps = {}) {
     return 2;
   }
 
-  const { title, text } = buildLayerDMessage(report);
+  const knownSecrets = SECRET_ENV_VARS.map((k) => env[k]).filter(Boolean);
+  const { title, text } = buildLayerDMessage(report, { knownSecrets });
   const dryRun = env.DRY_RUN === "1";
   if (!env.DINGTALK_WEBHOOK_URL && !dryRun) {
     console.log("[notify-layer-d] skip: DINGTALK_WEBHOOK_URL not set (add it to ~/.novada/monitor.env to enable)");
@@ -129,7 +147,7 @@ export async function main(argv, env, deps = {}) {
     title,
     text,
     dryRun,
-    ...(deps.fetchFn ? { fetchFn: deps.fetchFn } : {}),
+    fetchFn: withTimeout(deps.fetchFn ?? fetch),
     ...(deps.sleep ? { sleep: deps.sleep } : {}),
   });
   if (!res.ok) {

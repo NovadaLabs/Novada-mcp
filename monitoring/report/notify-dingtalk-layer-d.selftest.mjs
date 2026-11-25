@@ -7,7 +7,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildLayerDMessage, main, MAX_FAILURE_LINES } from "./notify-dingtalk-layer-d.mjs";
+import { buildLayerDMessage, main, MAX_FAILURE_LINES, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
 
 let failures = 0;
 function expect(cond, msg) {
@@ -49,6 +49,22 @@ console.log("[selftest] buildLayerDMessage — mixed report");
   expect(text.includes("最高严重度（我方）: P0"), "worst OURS severity is shown");
   const order = ["novada_proxy", "novada_search", "novada_scrape_bing"].map((n) => text.indexOf(n));
   expect(order[0] < order[1] && order[1] < order[2], "failure lines ordered ① → ② → ③");
+}
+
+console.log("[selftest] masking — known secrets by value, identifiers kept (review D4)");
+{
+  const shortKey = "k3yK3yK3yK3yK3y9"; // 16 chars: below the length heuristic
+  const rep2 = { ...MIXED, results: [row("novada_scrape_linkedin", "FAIL", "③-backend", "P1", `op linkedin_company_information_url failed for key ${shortKey}`)] };
+  const { text } = buildLayerDMessage(rep2, { knownSecrets: [shortKey] });
+  expect(!text.includes(shortKey), "a short key passed as a known secret is masked by value");
+  expect(text.includes("linkedin_company_information_url"), "snake_case identifiers are not mistaken for tokens");
+}
+
+console.log("[selftest] withTimeout — every send carries an AbortSignal (review D3)");
+{
+  let seen;
+  await withTimeout(async (_u, init) => { seen = init; return new Response("{}"); })("https://x.invalid", { method: "POST" });
+  expect(seen?.signal instanceof AbortSignal && seen.method === "POST", `signal attached, init preserved (timeout ${SEND_TIMEOUT_MS} ms)`);
 }
 
 console.log("[selftest] buildLayerDMessage — all green");

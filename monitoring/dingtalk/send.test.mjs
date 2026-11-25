@@ -18,6 +18,7 @@ import {
   buildActionCardBody,
   nextAvailableInMs,
   sendDingTalk,
+  redactWebhookSecrets,
 } from "./send.mjs";
 
 // ── Signing ──────────────────────────────────────────────────────────────────
@@ -140,6 +141,39 @@ test("sendDingTalk: retries once on network error, fails after exhausting the re
   assert.equal(res.ok, false);
   assert.equal(res.retried, true);
   assert.equal(calls, 2, "exactly one retry, not an unbounded loop");
+});
+
+test("sendDingTalk: a fetch error that echoes the URL never leaks access_token / sign / secret (review D1, 2026-11-25)", async () => {
+  // Real Node fetch, no stub: a scheme-less webhook URL fails at URL parsing
+  // (no network) with "Failed to parse URL from <full signed URL>".
+  const token = "FAKETOKEN0123456789abcdef";
+  const secret = "SECfakefakefake0123456789";
+  const logged = [];
+  const origError = console.error;
+  console.error = (...a) => logged.push(a.join(" "));
+  let res;
+  try {
+    res = await sendDingTalk({ webhookUrl: `oapi.dingtalk.invalid/robot/send?access_token=${token}`, secret, title: "t", text: "x", sleep: async () => {} });
+  } finally {
+    console.error = origError;
+  }
+  assert.equal(res.ok, false);
+  const all = JSON.stringify(res) + "\n" + logged.join("\n");
+  assert.ok(logged.length > 0, "the failure is still logged");
+  assert.ok(!all.includes(token), `access_token leaked: ${all}`);
+  assert.ok(!all.includes(secret), "secret leaked");
+  assert.ok(!/[?&]sign=[^&\s<]/.test(all), `signature leaked: ${all}`);
+});
+
+test("redactWebhookSecrets: exact values and credential query params are masked; plain text untouched", () => {
+  const url = "https://oapi.dingtalk.com/robot/send?access_token=TOK123456789&timestamp=1700000000000&sign=abc%2Bdef";
+  const out = redactWebhookSecrets(`Failed to parse URL from ${url} (secret SECabcdef)`, [url, "SECabcdef"]);
+  assert.ok(!out.includes("TOK123456789") && !out.includes("SECabcdef") && !out.includes("abc%2Bdef"), out);
+  // pattern-only path (value not known, e.g. Node changes its message format)
+  const out2 = redactWebhookSecrets("GET https://h/robot/send?access_token=OTHERTOKEN&sign=xyz failed");
+  assert.equal(out2, "GET https://h/robot/send?access_token=<redacted>&sign=<redacted> failed");
+  assert.equal(redactWebhookSecrets("errcode=310000 keywords not in content"), "errcode=310000 keywords not in content");
+  assert.equal(redactWebhookSecrets(undefined), "");
 });
 
 test("sendDingTalk: a 4xx is never retried", async () => {
