@@ -180,6 +180,25 @@ function defaultSleep(ms) {
 }
 
 /**
+ * Strip webhook credentials from a free-text error before it is logged or
+ * returned. Node's fetch echoes the full URL in some errors (e.g. "Failed to
+ * parse URL from <url>"), which would put access_token / timestamp+sign into
+ * logs — GitHub Actions masks registered secrets, but local job logs do not
+ * (review D1, 2026-11-25). Exact values first, then the query-param patterns.
+ *
+ * @param {string} text
+ * @param {Array<string | undefined>} knownSecrets  full URLs / secret values
+ * @returns {string}
+ */
+export function redactWebhookSecrets(text, knownSecrets = []) {
+  let out = String(text ?? "");
+  for (const v of knownSecrets) {
+    if (typeof v === "string" && v.length >= 6) out = out.split(v).join("<redacted>");
+  }
+  return out.replace(/([?&](?:access_token|sign|timestamp)=)[^&\s"'<>]+/gi, "$1<redacted>");
+}
+
+/**
  * POST one message to a DingTalk custom-robot webhook.
  *
  * - Signs the URL when `secret` is set.
@@ -254,7 +273,7 @@ export async function sendDingTalk({
       }
       return { httpStatus, parsed };
     } catch (err) {
-      return { httpStatus: 0, error: String(err?.message || err) };
+      return { httpStatus: 0, error: redactWebhookSecrets(String(err?.message || err), [url, webhookUrl, secret]) };
     }
   };
 
