@@ -20,6 +20,11 @@
       "failingSince": null,
       "alerted": false
     },
+    "tls_expiry": {
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
+    },
     "unauthenticated_401": {
       "consecutiveFailures": 0,
       "failingSince": null,
