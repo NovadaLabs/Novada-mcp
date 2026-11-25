@@ -31,6 +31,13 @@ name: Hosted Drift Check
 #   - hosted-server/vercel/api/mcp.ts             (the live hosted TOOLS derivation + HOSTED_HIDDEN,
 #                                                   the derivation gate + gate (b))
 #   - .github/workflows/**                        (so edits to this workflow re-validate themselves)
+#   - monitoring/smoke/**, monitoring/stress/**,  (2026-11-25: the monitoring self-tests below — the
+#     monitoring/lib/**                             Layer D probe list and Layer B baseline are pinned
+#                                                   to config/surfaces.json "hosted", so a HOSTED_HIDDEN
+#                                                   / surface change now fails here until the probes
+#                                                   follow; before this, both lists silently drifted
+#                                                   for months — browser/shein probed after removal,
+#                                                   static_ip_mgmt never probed)
 
 on:
   push:
@@ -42,6 +49,9 @@ on:
       - "npm-package/src/tools/scrape_*.ts"
       - "hosted-server/vercel/api/mcp.ts"
       - ".github/workflows/**"
+      - "monitoring/smoke/**"
+      - "monitoring/stress/**"
+      - "monitoring/lib/**"
   pull_request:
     branches: [main]
     paths:
@@ -51,6 +61,9 @@ on:
       - "npm-package/src/tools/scrape_*.ts"
       - "hosted-server/vercel/api/mcp.ts"
       - ".github/workflows/**"
+      - "monitoring/smoke/**"
+      - "monitoring/stress/**"
+      - "monitoring/lib/**"
   workflow_dispatch: {}
 
 jobs:
@@ -70,3 +83,16 @@ jobs:
 
       - name: Run hosted-drift guard
         run: node scripts/check-hosted-drift.mjs
+
+      # Offline self-tests (no key, no network): stubbed callTool/listTools.
+      # Includes PROBES == surfaces.hosted, baseline-tools.json == surfaces.hosted,
+      # and the write-guard carve-out cases. `if: !cancelled()` so every check
+      # still runs and reports after an earlier red step (one PR run shows all
+      # failures, and a parser red is not hidden behind a drift red).
+      - name: Monitoring self-test — Layer D full-tools probe
+        if: ${{ !cancelled() }}
+        run: node monitoring/smoke/full-tools-probe.selftest.mjs
+
+      - name: Monitoring self-test — k6 JSON-RPC body parser
+        if: ${{ !cancelled() }}
+        run: node monitoring/stress/jsonrpc-body.selftest.mjs
