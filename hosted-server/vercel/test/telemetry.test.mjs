@@ -1044,3 +1044,28 @@ test("mcp.ts source: F1 browser-tier caller-key pre-resolution covers both novad
   );
   assert.match(src, /const extractNeedsBrowserTier = name === "novada_extract"/);
 });
+
+// ── row b (2026-11-21 audit): SENTRY_ENVIRONMENT / NOVADA_REGION with VERCEL_* fallback ──
+import { resolveSentryEnvironment, resolveTelemetryRegion } from "../api/_telemetry.ts";
+import { readFileSync as _readFileSync } from "node:fs";
+
+test("resolveSentryEnvironment: SENTRY_ENVIRONMENT > VERCEL_ENV > 'development'", () => {
+  assert.equal(resolveSentryEnvironment({ SENTRY_ENVIRONMENT: "production", VERCEL_ENV: "preview" }), "production");
+  assert.equal(resolveSentryEnvironment({ VERCEL_ENV: "production" }), "production");
+  assert.equal(resolveSentryEnvironment({ SENTRY_ENVIRONMENT: "ec2" }), "ec2");
+  assert.equal(resolveSentryEnvironment({}), "development");
+});
+
+test("resolveTelemetryRegion: NOVADA_REGION > VERCEL_REGION > null", () => {
+  assert.equal(resolveTelemetryRegion({ NOVADA_REGION: "eu-central-1", VERCEL_REGION: "aws-eu-central-1" }), "eu-central-1");
+  assert.equal(resolveTelemetryRegion({ VERCEL_REGION: "aws-eu-central-1" }), "aws-eu-central-1");
+  assert.equal(resolveTelemetryRegion({ NOVADA_REGION: "eu-central-1" }), "eu-central-1");
+  assert.equal(resolveTelemetryRegion({}), null);
+});
+
+test("mcp.ts reads Sentry environment and telemetry region only through the resolvers", () => {
+  const src = _readFileSync(new URL("../api/mcp.ts", import.meta.url), "utf8");
+  assert.match(src, /environment: resolveSentryEnvironment\(process\.env\)/);
+  assert.equal((src.match(/resolveTelemetryRegion\(process\.env\)/g) || []).length, 3);
+  assert.doesNotMatch(src, /process\.env\.VERCEL_(ENV|REGION)/);
+});

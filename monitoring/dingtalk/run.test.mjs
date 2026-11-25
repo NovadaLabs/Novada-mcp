@@ -10,6 +10,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+// Offline stub for the tls_expiry row (never do a real handshake in unit tests).
+const STUB_TLS_OK = async () => ({ validTo: new Date(Date.now() + 90 * 86_400_000) });
+
 import {
   renderDailyReport,
   shanghaiDateStamp,
@@ -251,7 +254,7 @@ test("readExpectedToolCount: returns null (not throw) for a missing file", () =>
 test("runAlertMode: sends exactly one alert message on the 1st CONFIRMED failure (in-run re-probe), persists state", async () => {
   const sent = [];
   let saved = null;
-  const ctx = { mcpUrl: "https://x/mcp", apiKey: "test-key" };
+  const ctx = { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" };
   const io = {
     send: async (msg) => {
       sent.push(msg);
@@ -360,7 +363,7 @@ test("runAlertMode (a): fail-then-pass — the re-probe recovers inside the same
   const originalFetch = globalThis.fetch;
   globalThis.fetch = fetchFn;
   try {
-    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
     assert.equal(exitCode, 0);
   } finally {
     globalThis.fetch = originalFetch;
@@ -389,7 +392,7 @@ test("runAlertMode (b): fail-then-fail — confirmed on re-probe -> exactly one 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = fetchFn;
   try {
-    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
     assert.equal(exitCode, 0);
   } finally {
     globalThis.fetch = originalFetch;
@@ -422,7 +425,7 @@ test("runAlertMode (c): old-format persisted state (pre-cadence-change shape, la
   const originalFetch = globalThis.fetch;
   globalThis.fetch = fetchFn;
   try {
-    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
     assert.equal(exitCode, 0);
   } finally {
     globalThis.fetch = originalFetch;
@@ -456,7 +459,7 @@ test("runAlertMode: DRY_RUN never calls load()/save() (state untouched)", async 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" }, tools: [] } }) });
   try {
-    await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "test-key" }, dryRun: true, io });
+    await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: true, io });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -496,7 +499,7 @@ test("runAlertMode: WITHOUT NOVADA_TEST_KEY, auth-requiring free checks report '
   };
   let exitCode;
   try {
-    exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp" } /* no apiKey */, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK } /* no apiKey */, dryRun: false, webhookUrl: "https://example.invalid/x", io });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -536,11 +539,11 @@ test("runAlertMode: a misconfigured notice for the same check is sent exactly ON
     };
   };
   try {
-    await runAlertMode({ ctx: { mcpUrl: "https://x/mcp" }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: 1000 });
+    await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: 1000 });
     const firstRunSentCount = sent.length;
     assert.ok(firstRunSentCount > 0, "first run must notify");
 
-    await runAlertMode({ ctx: { mcpUrl: "https://x/mcp" }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: 1000 + 15 * 60_000 });
+    await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: 1000 + 15 * 60_000 });
     assert.equal(sent.length, firstRunSentCount, "second consecutive run with the SAME missing-key misconfiguration must send nothing new");
   } finally {
     globalThis.fetch = originalFetch;
@@ -569,7 +572,7 @@ test("runDailyMode: sends exactly one markdown report covering all check ids", a
     return { status: 401, headers: { get: () => null } };
   };
   try {
-    const exitCode = await runDailyMode({ ctx: { mcpUrl: "https://x/mcp", apiKey: "k" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    const exitCode = await runDailyMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
     assert.equal(exitCode, 0);
   } finally {
     globalThis.fetch = originalFetch;
@@ -646,4 +649,10 @@ test("oauth_register: target whose /register returns 201 -> zero alerts", async 
   const { exit, posted } = await runAgainst(201);
   assert.equal(exit, 0);
   assert.equal(posted.length, 0);
+});
+
+test("classifyFailure: tls (cert expiring soon) -> TLS annotation, not 未分类, not an account issue", () => {
+  const cls = classifyFailure({ errorClass: "tls" });
+  assert.equal(cls.annotation, "TLS 证书即将到期");
+  assert.equal(cls.accountIssue, false);
 });

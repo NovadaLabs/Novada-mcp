@@ -31,10 +31,11 @@ AI client
                                     Novada upstream APIs (proxy network, scraper, SERP)
 ```
 
-`hosted-server/vercel/api/mcp.ts` does not re-implement tools. Its deploy step
-(`hosted-server/scripts/deploy-hosted.sh`) builds `npm-package/`, then vendors the
-compiled `build/` output into `hosted-server/vercel/vendor/` — never hand-edited,
-regenerated every deploy.
+`hosted-server/vercel/api/mcp.ts` does not re-implement tools. Its vendor step
+(`hosted-server/scripts/deploy-hosted.sh --vendor-only`) builds `npm-package/`, then
+vendors the compiled `build/` output into `hosted-server/vercel/vendor/` — never
+hand-edited, regenerated every release. Production (AWS EC2) is shipped with
+`hosted-server/ec2/deploy-ec2.sh` (rolling, health-gated, auto-rollback).
 
 ## Where does X actually live?
 
@@ -52,7 +53,8 @@ the resolution, grep-verified against the live code:
 | HTTP transport, auth, quota, rate-limit, telemetry | `hosted-server/vercel/api/mcp.ts` |
 | MCP resources (read-only reference data) | `npm-package/src/resources/` |
 | MCP prompts (workflow templates) | `npm-package/src/prompts/` |
-| Deploy hosted (build → vendor → gate → deploy → verify) | `hosted-server/scripts/deploy-hosted.sh` |
+| Build + vendor + gates for hosted | `hosted-server/scripts/deploy-hosted.sh --vendor-only` |
+| Deploy hosted to production (EC2, rolling) | `hosted-server/ec2/deploy-ec2.sh` |
 
 **Concretely:** to change what an AI client reads for a tool (its description, required
 params, examples), edit `_TOOL_DEFINITIONS` in `core.ts`, not `index.ts` and not the

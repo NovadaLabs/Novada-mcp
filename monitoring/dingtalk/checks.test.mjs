@@ -11,6 +11,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+// Offline stub for the tls_expiry row (never do a real handshake in unit tests).
+const STUB_TLS_OK = async () => ({ validTo: new Date(Date.now() + 90 * 86_400_000) });
+
 import {
   probeInitialize,
   probeToolsList,
@@ -61,21 +64,21 @@ function jsonResponse(status, body, headers = {}) {
 
 test("probeInitialize: ok when serverInfo.version present", async () => {
   const fetchFn = async () => jsonResponse(200, { jsonrpc: "2.0", id: 1, result: { serverInfo: { version: "0.9.42" } } });
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, true);
   assert.equal(r.detail.version, "0.9.42");
 });
 
 test("probeInitialize: fails when serverInfo.version missing", async () => {
   const fetchFn = async () => jsonResponse(200, { jsonrpc: "2.0", id: 1, result: {} });
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "shape");
 });
 
 test("probeInitialize: fails on non-200", async () => {
   const fetchFn = async () => jsonResponse(402, { error: "DEPLOYMENT_DISABLED" });
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "http");
 });
@@ -84,7 +87,7 @@ test("probeInitialize: fails on network error", async () => {
   const fetchFn = async () => {
     throw new Error("getaddrinfo ENOTFOUND");
   };
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "network");
 });
@@ -95,7 +98,7 @@ test("probeInitialize: fails on network error", async () => {
 // misconfiguration, never attempt the call, and never look like a real
 // outage (network/http/shape) — see checks.mjs's requireApiKey().
 test("probeInitialize: config-fails (not network-fails) when apiKey is missing, and never calls fetchFn", async () => {
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", fetchFn: async () => { throw new Error("must not be called"); } });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: async () => { throw new Error("must not be called"); } });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "config");
   assert.match(r.note, /monitor misconfigured/);
@@ -103,14 +106,14 @@ test("probeInitialize: config-fails (not network-fails) when apiKey is missing, 
 });
 
 test("probeToolsList: config-fails (not network-fails) when apiKey is missing, and never calls fetchFn", async () => {
-  const r = await probeToolsList({ mcpUrl: "https://x/mcp", fetchFn: async () => { throw new Error("must not be called"); } });
+  const r = await probeToolsList({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: async () => { throw new Error("must not be called"); } });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "config");
   assert.match(r.note, /monitor misconfigured/);
 });
 
 test("probeNovadaSetup: config-fails (not network-fails) when apiKey is missing, and never calls fetchFn", async () => {
-  const r = await probeNovadaSetup({ mcpUrl: "https://x/mcp", fetchFn: async () => { throw new Error("must not be called"); } });
+  const r = await probeNovadaSetup({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: async () => { throw new Error("must not be called"); } });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "config");
   assert.match(r.note, /monitor misconfigured/);
@@ -119,7 +122,7 @@ test("probeNovadaSetup: config-fails (not network-fails) when apiKey is missing,
 test("probeNovadaExtract/probeScrapeGoogle/probeScrapeBing: all config-fail the same way when apiKey is missing (class-not-instance — not a per-tool special case)", async () => {
   const neverCall = async () => { throw new Error("must not be called"); };
   for (const probe of [probeNovadaExtract, probeScrapeGoogle, probeScrapeBing]) {
-    const r = await probe({ mcpUrl: "https://x/mcp", fetchFn: neverCall });
+    const r = await probe({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: neverCall });
     assert.equal(r.ok, false);
     assert.equal(r.errorClass, "config");
     assert.match(r.note, /monitor misconfigured/);
@@ -128,7 +131,7 @@ test("probeNovadaExtract/probeScrapeGoogle/probeScrapeBing: all config-fail the 
 
 test("probeInitialize: succeeds normally once apiKey IS present (guard doesn't block real calls)", async () => {
   const fetchFn = async () => jsonResponse(200, { result: { serverInfo: { version: "0.9.42" } } });
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, true);
 });
 
@@ -143,7 +146,7 @@ test("probeInitialize: succeeds normally once apiKey IS present (guard doesn't b
 
 test("probeInitialize: a probe-side timeout gets errorClass 'timeout' (distinct from a real network failure), latency is still reported", async () => {
   const fetchFn = slowFetch(200, jsonResponse(200, { result: { serverInfo: { version: "0.9.42" } } }));
-  const r = await probeInitialize({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 20 });
+  const r = await probeInitialize({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn, timeoutMs: 20 });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "timeout");
   assert.match(r.note, /timeout after 20ms/);
@@ -152,7 +155,7 @@ test("probeInitialize: a probe-side timeout gets errorClass 'timeout' (distinct 
 
 test("probeToolsList: a probe-side timeout gets errorClass 'timeout'", async () => {
   const fetchFn = slowFetch(200, jsonResponse(200, { result: { tools: [] } }));
-  const r = await probeToolsList({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 20 });
+  const r = await probeToolsList({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn, timeoutMs: 20 });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "timeout");
 });
@@ -173,7 +176,7 @@ test("probeUnauthenticated401: a probe-side timeout gets errorClass 'timeout' (e
 
 test("probeNovadaSearch (billable tool call via interpretToolCallResult): a probe-side timeout gets errorClass 'timeout', not 'network'", async () => {
   const fetchFn = slowFetch(200, jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } }));
-  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 20 });
+  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn, timeoutMs: 20 });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "timeout");
 });
@@ -209,7 +212,7 @@ test("runChecks: per-row CHECK_TABLE timeoutMs overrides a short/stale ctx.timeo
   // value (even more hostile) against a fetch that resolves in 50ms — this
   // only passes if runChecks lets row.timeoutMs (65000) win over ctx.timeoutMs.
   const fetchFn = slowFetch(50, jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } }));
-  const results = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, timeoutMs: 5 }, ["billable"]);
+  const results = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn, timeoutMs: 5 }, ["billable"]);
   assert.equal(results.length, CHECK_TABLE.filter((r) => r.cost === "billable").length);
   for (const r of results) {
     assert.equal(r.ok, true, `${r.id} unexpectedly failed under the per-row timeout fix: ${r.note}`);
@@ -222,7 +225,7 @@ test("runChecks: lowering ONE row's CHECK_TABLE.timeoutMs changes only that chec
   initializeRow.timeoutMs = 20; // artificially tight, well under the real 10s default
   try {
     const fetchFn = slowFetch(200, jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } }));
-    const results = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free"]);
+    const results = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn }, ["free"]);
     const initializeResult = results.find((r) => r.id === "initialize");
     const toolsListResult = results.find((r) => r.id === "tools_list");
     assert.equal(initializeResult.ok, false);
@@ -240,21 +243,21 @@ test("runChecks: lowering ONE row's CHECK_TABLE.timeoutMs changes only that chec
 
 test("probeToolsList: ok when count matches expectedToolCount", async () => {
   const fetchFn = async () => jsonResponse(200, { result: { tools: [{ name: "a" }, { name: "b" }] } });
-  const r = await probeToolsList({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, expectedToolCount: 2 });
+  const r = await probeToolsList({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn, expectedToolCount: 2 });
   assert.equal(r.ok, true);
   assert.equal(r.detail.count, 2);
 });
 
 test("probeToolsList: fails when count diverges from golden baseline", async () => {
   const fetchFn = async () => jsonResponse(200, { result: { tools: [{ name: "a" }] } });
-  const r = await probeToolsList({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn, expectedToolCount: 28 });
+  const r = await probeToolsList({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn, expectedToolCount: 28 });
   assert.equal(r.ok, false);
   assert.match(r.note, /count 1 != golden baseline 28/);
 });
 
 test("probeToolsList: skips the count check (passes) when expectedToolCount is unknown", async () => {
   const fetchFn = async () => jsonResponse(200, { result: { tools: [{ name: "a" }] } });
-  const r = await probeToolsList({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }); // no expectedToolCount
+  const r = await probeToolsList({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn }); // no expectedToolCount
   assert.equal(r.ok, true);
 });
 
@@ -332,7 +335,7 @@ test("probeNovadaSearch: extracts NovadaErrorCode from the tool's isError text",
     'agent_instruction: "wait and retry"',
   ].join("\n");
   const fetchFn = async () => jsonResponse(200, { result: { isError: true, content: [{ type: "text", text: errorText }] } });
-  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, false);
   assert.equal(r.errorCode, "RATE_LIMITED");
   assert.equal(r.errorClass, "tool");
@@ -340,12 +343,12 @@ test("probeNovadaSearch: extracts NovadaErrorCode from the tool's isError text",
 
 test("probeNovadaSearch: ok on a clean (non-isError) result", async () => {
   const fetchFn = async () => jsonResponse(200, { result: { content: [{ type: "text", text: "search results..." }] } });
-  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.ok, true);
 });
 
 test("probeNovadaSearch: config-fails (not network-fails) when apiKey is missing", async () => {
-  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", fetchFn: async () => { throw new Error("must not be called"); } });
+  const r = await probeNovadaSearch({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: async () => { throw new Error("must not be called"); } });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "config");
 });
@@ -353,7 +356,7 @@ test("probeNovadaSearch: config-fails (not network-fails) when apiKey is missing
 test("probeNovadaAccount: extracts errorCode the same way", async () => {
   const fetchFn = async () =>
     jsonResponse(200, { result: { isError: true, content: [{ type: "text", text: "Error [INVALID_API_KEY]: Invalid or missing API key." }] } });
-  const r = await probeNovadaAccount({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn });
+  const r = await probeNovadaAccount({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn });
   assert.equal(r.errorCode, "INVALID_API_KEY");
 });
 
@@ -382,7 +385,7 @@ test("CHECK_TABLE: every row has an English id/label AND a non-empty Chinese lab
 });
 
 test("CHECK_TABLE: requiredEnvVars is a class-level declaration, not a per-id guess — every auth-requiring probe (and ONLY those) declares NOVADA_TEST_KEY", () => {
-  const authFreeIds = new Set(["oauth_discovery", "oauth_register", "unauthenticated_401"]);
+  const authFreeIds = new Set(["oauth_discovery", "oauth_register", "tls_expiry", "unauthenticated_401"]);
   for (const row of CHECK_TABLE) {
     assert.ok(Array.isArray(row.requiredEnvVars), `${row.id}: requiredEnvVars must be an array`);
     if (authFreeIds.has(row.id)) {
@@ -410,10 +413,10 @@ test("runChecks(['free']) only runs free rows, runChecks(['free','billable']) ru
     if (!opts || opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     return jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } });
   };
-  const freeOnly = await runChecks({ mcpUrl: "https://x/mcp", fetchFn }, ["free"]);
+  const freeOnly = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn }, ["free"]);
   assert.equal(freeOnly.length, CHECK_TABLE.filter((r) => r.cost === "free").length);
 
-  const everything = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free", "billable"]);
+  const everything = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn }, ["free", "billable"]);
   assert.equal(everything.length, CHECK_TABLE.length);
 });
 
@@ -421,7 +424,7 @@ test("runChecks: a throwing probe is caught and reported as a failed row, not a 
   const fetchFn = async () => {
     throw new Error("boom");
   };
-  const results = await runChecks({ mcpUrl: "https://x/mcp", fetchFn }, ["free"]);
+  const results = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: async () => { throw new Error("boom"); }, fetchFn }, ["free"]);
   assert.equal(results.length, CHECK_TABLE.filter((r) => r.cost === "free").length);
   assert.ok(results.every((r) => r.ok === false));
 });
@@ -432,11 +435,11 @@ test("runChecks({ids}): restricts to just the given ids, intersected with costs"
     if (opts.method === "GET") return jsonResponse(200, { resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" });
     return jsonResponse(200, { result: { serverInfo: { version: "0.9.42" }, tools: [] } });
   };
-  const results = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free"], { ids: ["initialize", "oauth_discovery"] });
+  const results = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn }, ["free"], { ids: ["initialize", "oauth_discovery"] });
   assert.deepEqual(results.map((r) => r.id).sort(), ["initialize", "oauth_discovery"]);
 
   // A billable id is never run when costs=["free"], even if listed in ids.
-  const filtered = await runChecks({ mcpUrl: "https://x/mcp", apiKey: "k", fetchFn }, ["free"], { ids: ["novada_search"] });
+  const filtered = await runChecks({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn }, ["free"], { ids: ["novada_search"] });
   assert.equal(filtered.length, 0);
 });
 
@@ -460,7 +463,7 @@ test("runChecksWithConfirmation: no failures -> returns the first pass unchanged
     return jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } });
   };
   const results = await runChecksWithConfirmation(
-    { mcpUrl: "https://x/mcp", apiKey: "k", fetchFn },
+    { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn },
     ["free"],
     { sleep: async () => { sleepCalled = true; } }
   );
@@ -484,7 +487,7 @@ test("runChecksWithConfirmation: a transient failure that PASSES on re-probe -> 
     return jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } });
   };
   const results = await runChecksWithConfirmation(
-    { mcpUrl: "https://x/mcp", apiKey: "k", fetchFn },
+    { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn },
     ["free"],
     { sleep: async (ms) => { sleepCalls.push(ms); } }
   );
@@ -509,7 +512,7 @@ test("runChecksWithConfirmation: a failure CONFIRMED on re-probe stays failing (
     return jsonResponse(200, { result: { content: [{ type: "text", text: "ok" }] } });
   };
   const results = await runChecksWithConfirmation(
-    { mcpUrl: "https://x/mcp", apiKey: "k", fetchFn },
+    { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k", fetchFn },
     ["free"],
     { sleep: async () => {} }
   );
@@ -536,7 +539,7 @@ test("runChecksWithConfirmation: config-class (missing-secret) failures are neve
   };
   let sleepCalls = 0;
   const results = await runChecksWithConfirmation(
-    { mcpUrl: "https://x/mcp", fetchFn } /* no apiKey */,
+    { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn } /* no apiKey */,
     ["free"],
     { sleep: async () => { sleepCalls += 1; } }
   );
@@ -581,25 +584,74 @@ function registerFetch(status, body) {
 }
 
 test("probeOAuthRegister: 201 + client_id -> ok", async () => {
-  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(201, { client_id: "abc" }) });
+  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: registerFetch(201, { client_id: "abc" }) });
   assert.equal(r.ok, true);
 });
 
 test("probeOAuthRegister: HTTP 500 (the real outage) -> fail class http", async () => {
-  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(500, { error: "INTERNAL_ERROR" }) });
+  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: registerFetch(500, { error: "INTERNAL_ERROR" }) });
   assert.equal(r.ok, false);
   assert.equal(r.errorClass, "http");
   assert.match(r.note, /HTTP 500/);
 });
 
 test("probeOAuthRegister: structured 503 (KV down) -> fail", async () => {
-  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(503, { error: "temporarily_unavailable" }) });
+  const r = await probeOAuthRegister({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: registerFetch(503, { error: "temporarily_unavailable" }) });
   assert.equal(r.ok, false);
 });
 
 test("probeOAuthRegister: 2xx without client_id -> fail shape; network error -> fail network", async () => {
-  const shape = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: registerFetch(201, {}) });
+  const shape = await probeOAuthRegister({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: registerFetch(201, {}) });
   assert.equal(shape.errorClass, "shape");
-  const net = await probeOAuthRegister({ mcpUrl: "https://x/mcp", fetchFn: async () => { throw new Error("ECONNREFUSED"); } });
+  const net = await probeOAuthRegister({ mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, fetchFn: async () => { throw new Error("ECONNREFUSED"); } });
   assert.equal(net.errorClass, "network");
+});
+
+// ── tls_expiry (2026-11-20 audit row p) ──
+
+import { probeTlsExpiry, TLS_EXPIRY_MIN_DAYS } from "./checks.mjs";
+
+const NOW = Date.parse("2026-11-21T00:00:00Z");
+const tlsCtx = (tlsFn) => ({ mcpUrl: "https://mcp.novada.com/mcp", tlsFn, now: () => NOW });
+const inDays = (d) => async () => ({ validTo: new Date(NOW + d * 86_400_000).toUTCString() });
+
+test("probeTlsExpiry: >= 21 days left -> ok (boundary: exactly 21 days is ok)", async () => {
+  assert.equal((await probeTlsExpiry(tlsCtx(inDays(67)))).ok, true);
+  assert.equal((await probeTlsExpiry(tlsCtx(inDays(TLS_EXPIRY_MIN_DAYS)))).ok, true);
+});
+
+test("probeTlsExpiry: < 21 days left -> alert (fail class tls) with the days in the note", async () => {
+  const r = await probeTlsExpiry(tlsCtx(inDays(20)));
+  assert.equal(r.ok, false);
+  assert.equal(r.errorClass, "tls");
+  assert.match(r.note, /expires in 20 days/);
+  assert.equal((await probeTlsExpiry(tlsCtx(inDays(-1)))).ok, false, "an already-expired cert alerts");
+});
+
+test("probeTlsExpiry: handshake failure / timeout / bad date -> fail", async () => {
+  const net = await probeTlsExpiry(tlsCtx(async () => { throw new Error("ECONNREFUSED"); }));
+  assert.equal(net.ok, false);
+  assert.equal(net.errorClass, "network");
+  const to = await probeTlsExpiry(tlsCtx(async () => { throw Object.assign(new Error("timeout"), { name: "TimeoutError" }); }));
+  assert.equal(to.errorClass, "timeout");
+  const bad = await probeTlsExpiry(tlsCtx(async () => ({ validTo: "garbage" })));
+  assert.equal(bad.errorClass, "shape");
+});
+
+test("probeTlsExpiry: probes host:port from mcpUrl; severity P1 in CHECK_TABLE", async () => {
+  let seen;
+  await probeTlsExpiry({ mcpUrl: "https://mcp.novada.com/mcp", now: () => NOW, tlsFn: async (h, p) => { seen = [h, p]; return { validTo: new Date(NOW + 90 * 86_400_000) }; } });
+  assert.deepEqual(seen, ["mcp.novada.com", 443]);
+  assert.equal(CHECK_TABLE.find((r) => r.id === "tls_expiry").severity, "P1");
+});
+
+test("probeTlsExpiry: real OpenSSL valid_to format ('Feb 20 12:00:00 2027 GMT') is parsed", async () => {
+  const now = Date.parse("2026-11-21T00:00:00Z");
+  const mk = (validTo) => ({ mcpUrl: "https://mcp.novada.com/mcp", now: () => now, tlsFn: async () => ({ validTo }) });
+  const far = await probeTlsExpiry(mk("Feb 20 12:00:00 2027 GMT"));
+  assert.equal(far.ok, true);
+  assert.ok(far.detail.daysLeft > 90 && far.detail.daysLeft < 93, String(far.detail.daysLeft));
+  const near = await probeTlsExpiry(mk("Dec  5 12:00:00 2026 GMT"));
+  assert.equal(near.ok, false);
+  assert.equal(near.errorClass, "tls");
 });

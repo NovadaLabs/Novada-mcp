@@ -14,6 +14,13 @@ apt-get update -q
 apt-get upgrade -y -q
 apt-get install -y -q ca-certificates curl gnupg git nginx certbot python3-certbot-nginx ufw unattended-upgrades jq
 
+# Local Redis = the KV store (rate limits, OAuth state) since 2026-11-20.
+# This script does install + enable ONLY; configure it (requirepass, AOF,
+# maxmemory/noeviction, bind loopback) per the 2026-11-20 KV cutover runbook
+# (internal). REDIS_URL (with its password) lives ONLY in /etc/novada-mcp/env.
+apt-get install -y -q redis-server
+systemctl enable redis-server
+
 # Node 24 (NodeSource)
 if ! node -v 2>/dev/null | grep -q '^v24\.'; then
   curl -fsSL https://deb.nodesource.com/setup_24.x | bash -

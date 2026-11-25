@@ -118,6 +118,8 @@ const ERROR_CLASS_CLASSIFICATION = {
   // run's "timeout after 10000ms" on novada_scrape_bing). Never collapse
   // this into the generic "服务端/网络" bucket.
   timeout: { annotation: "监控探针超时（服务端可能仍在处理）", accountIssue: false },
+  // tls_expiry row: certificate < 21 days from expiry (not an outage yet).
+  tls: { annotation: "TLS 证书即将到期", accountIssue: false },
 };
 const UNCLASSIFIED = { annotation: "未分类", accountIssue: false };
 

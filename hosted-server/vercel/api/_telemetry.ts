@@ -308,6 +308,16 @@ export function telemetryEnabled(): boolean {
   return !!(process.env.TELEMETRY_SUPABASE_URL && process.env.TELEMETRY_SUPABASE_KEY);
 }
 
+/** Sentry environment tag: explicit SENTRY_ENVIRONMENT wins, legacy VERCEL_ENV is the fallback. */
+export function resolveSentryEnvironment(env: Record<string, string | undefined>): string {
+  return env.SENTRY_ENVIRONMENT ?? env.VERCEL_ENV ?? "development";
+}
+
+/** Telemetry `region` column: explicit NOVADA_REGION wins, legacy VERCEL_REGION is the fallback. */
+export function resolveTelemetryRegion(env: Record<string, string | undefined>): string | null {
+  return env.NOVADA_REGION ?? env.VERCEL_REGION ?? null;
+}
+
 // ─── Target-domain extraction (Tier 2, owner-approved) ───────────────────────
 
 /**
