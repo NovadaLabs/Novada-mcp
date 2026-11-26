@@ -334,6 +334,20 @@ if grep -qi "RESTART FAILED for novada-mcp@3000\|HEALTH CHECK FAILED for novada-
   fail "@3000 must never appear as failed/restarted in the output — it was never touched"
 fi
 
+# ─── 6b. Settle between instances (2026-11-26) ─────────────────────────────
+# Forward pass: @3000 restarted OK → exactly ONE settle → @3001 (fails) →
+# rollback with NO settle.
+SETTLES="$(grep -c "settling .* before the next instance" "$OUTPUT" || true)"
+assert_eq "settle count in the forward+rollback run" "1" "$SETTLES"
+L_OK3000="$(grep -n "novada-mcp@3000 OK, serving" "$OUTPUT" | head -1 | cut -d: -f1)"
+L_SETTLE="$(grep -n "settling .* before the next instance" "$OUTPUT" | head -1 | cut -d: -f1)"
+L_ROLL="$(grep -niE "rolling back|rolled back|ROLLBACK" "$OUTPUT" | head -1 | cut -d: -f1)"
+if [ -n "$L_OK3000" ] && [ -n "$L_SETTLE" ] && [ "$L_SETTLE" -gt "$L_OK3000" ] && { [ -z "$L_ROLL" ] || [ "$L_SETTLE" -lt "$L_ROLL" ]; }; then
+  echo "ok: the settle sits after @3000 converged and before any rollback" >&2
+else
+  fail "settle position wrong (ok3000=$L_OK3000 settle=$L_SETTLE rollback=$L_ROLL)"
+fi
+
 # ─── 7. Health-gate path: default, forwarded override, allowlist ───────────
 # Default run above must have gated on the KV-aware readiness path only.
 if grep -qv '/health/ready$' "$STATE/curl-urls"; then
@@ -359,6 +373,13 @@ if [ -s "$STATE/curl-urls" ] && ! grep -qv '/health$' "$STATE/curl-urls"; then
 else
   fail "override run did not gate on /health: $(sort -u "$STATE/curl-urls" | tr '\n' ' ')"
 fi
+# This second run finds @3000 already on the target release (skip, no restart)
+# → the following instance must NOT be preceded by a settle.
+if grep -q "novada-mcp@3000 already running" "$SANDBOX/output-override.log" && ! grep -q "settling" "$SANDBOX/output-override.log"; then
+  echo "ok: an instance that was skipped (already on target) is not followed by a settle" >&2
+else
+  fail "skip → settle check: $(grep -E 'already running|settling|OK, serving' "$SANDBOX/output-override.log" | tr '\n' '|')"
+fi
 # Allowlist: an invalid value is refused locally before any ssh/scp happens.
 cat > "$BIN/ssh" <<EOF2
 #!/usr/bin/env bash
@@ -375,6 +396,26 @@ for s in "$DEPLOY_SCRIPT" "$(dirname "$DEPLOY_SCRIPT")/restart-rolling.sh"; do
     echo "ok: $(basename "$s") refuses an invalid NOVADA_MCP_HEALTH_PATH before ssh/scp" >&2
   else
     fail "$(basename "$s") invalid override: rc=$rc ssh-called=$([ -e "$STATE/ssh-called" ] && echo yes || echo no)"
+  fi
+done
+
+for s in "$DEPLOY_SCRIPT" "$(dirname "$DEPLOY_SCRIPT")/restart-rolling.sh"; do
+  for bad in '5;id' '$(id)' '12 X=1' '61' '+5'; do
+    rm -f "$STATE/ssh-called"
+    set +e
+    NOVADA_MCP_ROLL_SETTLE_S="$bad" PATH="$BIN:$PATH" "$RUNNER_BASH" "$s" testhost >"$SANDBOX/output-bad-settle.log" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" = 1 ] && grep -q "REFUSED: NOVADA_MCP_ROLL_SETTLE_S" "$SANDBOX/output-bad-settle.log" && [ ! -e "$STATE/ssh-called" ]; then
+      echo "ok: $(basename "$s") refuses NOVADA_MCP_ROLL_SETTLE_S='$bad' before ssh/scp" >&2
+    else
+      fail "$(basename "$s") NOVADA_MCP_ROLL_SETTLE_S='$bad': rc=$rc ssh-called=$([ -e "$STATE/ssh-called" ] && echo yes || echo no)"
+    fi
+  done
+  if grep -qE '^ssh "\$HOST" .*NOVADA_MCP_ROLL_SETTLE_S="\$ROLL_SETTLE_S" .*bash -s <<' "$s"; then
+    echo "ok: $(basename "$s") forwards the validated NOVADA_MCP_ROLL_SETTLE_S on its ssh line" >&2
+  else
+    fail "$(basename "$s") does not forward NOVADA_MCP_ROLL_SETTLE_S on its ssh line"
   fi
 done
 

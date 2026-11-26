@@ -11,7 +11,10 @@ case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HE
 # Settle between instances (2026-11-26): nginx's passive check (max_fails=1,
 # fail_timeout=10s) can mark a just-restarted instance down for 10 s when an SSE
 # stream on its OLD process hits proxy_read_timeout; touching the next instance
-# inside that window = "no live upstreams" (2×502 on 2026-11-25). Seconds, 0-60.
+# inside that window = "no live upstreams" (2×502 on 2026-11-25). nginx counts
+# fail_timeout in whole seconds, so "down 10 s" is effectively up to ~11 s —
+# keep this default >= fail_timeout + 2 (checked by test/roll-settle-selftest.sh;
+# nginx-novada-mcp.conf cross-references it). Seconds, 0-60.
 ROLL_SETTLE_S="${NOVADA_MCP_ROLL_SETTLE_S:-12}"
 case "$ROLL_SETTLE_S" in ''|*[!0-9]*) echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1 ;; esac
 [ "$ROLL_SETTLE_S" -le 60 ] || { echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1; }
