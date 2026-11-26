@@ -519,6 +519,8 @@ async function main() {
   expect(c1.domain === "①-mcp-code" && c1.severity === "P0", `classifyFailure: core tool, HTTP-200 RATE_LIMITED without task_id stays OURS P0 (got ${c1.domain}/${c1.severity})`);
   const c2 = classifyFailure(scraperProbe, errRes(RL(null)));
   expect(c2.domain === "①-mcp-code", `classifyFailure: scraper, RATE_LIMITED without task_id stays OURS (got ${c2.domain})`);
+  const c1b = classifyFailure(coreProbe, errRes(RL("t1")));
+  expect(c1b.domain === "①-mcp-code", `classifyFailure: NON-scraper tool stays OURS even if the text carries a task_id (review LOW-2) (got ${c1b.domain})`);
   const c3 = classifyFailure(coreProbe, errRes("Too many requests from your IP. Please slow down.", 429));
   expect(c3.domain !== "③-backend", `classifyFailure: gateway 429 stays ours (got ${c3.domain})`);
   const c4 = classifyFailure(scraperProbe, errRes(RL("t9")));
@@ -544,6 +546,10 @@ async function main() {
     const { row, waits } = await runSeq(scraperProbe, T, [P, T, P, P]);
     expect(row.status === "ASYNC" && row.domain === "-", `seq T|P,T,P,P -> ASYNC (got ${row.status}/${row.domain})`);
     expect(JSON.stringify(waits) === JSON.stringify([30000, 10000, 30000, 10000]), `seq T|P,T,P,P waits = initial 30s, then 10s after P, 30s after T, 10s after P (got ${JSON.stringify(waits)})`);
+  }
+  {
+    const { row } = await runSeq(scraperProbe, P, [T, T, T, T]);
+    expect(row.status === "ASYNC", `review LOW-1: entry processing then 4 throttled resumes -> ASYNC (the task WAS seen processing) (got ${row.status}/${row.domain})`);
   }
   {
     const { row } = await runSeq(scraperProbe, P, [P, P, P, T]);

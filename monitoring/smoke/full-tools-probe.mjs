@@ -171,9 +171,11 @@ const NETWORK_RETRY_BACKOFF_MS = 1000;
 // sleeping PROCESSING_POLL_INTERVAL_MS between attempts (never before the
 // first — the initial submit call already spent time getting to
 // "processing"). This bounds this script's OWN added sleep budget to
-// (PROCESSING_POLL_MAX_ATTEMPTS - 1) * PROCESSING_POLL_INTERVAL_MS ≈ 30s,
-// plus each resume call's own round-trip (bounded total ≈40-50s in the
-// common case) — the number of network round-trips is capped at N
+// (PROCESSING_POLL_MAX_ATTEMPTS - 1) * PROCESSING_POLL_INTERVAL_MS ≈ 30s on
+// the processing path — up to ≈120s on the upstream-throttle path (an initial
+// wait plus up to 30s before each resume; see THROTTLE_WAIT_CAP_MS) — plus
+// each resume call's own round-trip (bounded total ≈40-50s in the common
+// processing case) — the number of network round-trips is capped at N
 // regardless of how long any single one takes. Both overridable via
 // runProbe/runAllProbes' deps so the offline self-test can shrink these to
 // ~0 and run in milliseconds instead of tens of seconds.
@@ -1039,7 +1041,9 @@ async function runProbe(
     let lastThrottled = false;
     let lastThrottleRes = throttledTaskId ? res : null;
     let throttledPolls = 0;
-    let sawProcessing = false;
+    // The entry response itself counts: if it was "processing" (not a
+    // throttle), we have already seen the task's state (review LOW-1).
+    let sawProcessing = !throttledTaskId;
 
     // Resume up to processingPollMaxAttempts times, ~processingPollIntervalMs
     // apart (see the PROCESSING_POLL_MAX_ATTEMPTS doc comment above). Each
