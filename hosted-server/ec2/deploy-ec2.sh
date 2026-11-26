@@ -8,6 +8,13 @@ HOST="${1:-novada-mcp}"
 HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
 case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
 [ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
+# Settle between instances (2026-11-26): nginx's passive check (max_fails=1,
+# fail_timeout=10s) can mark a just-restarted instance down for 10 s when an SSE
+# stream on its OLD process hits proxy_read_timeout; touching the next instance
+# inside that window = "no live upstreams" (2×502 on 2026-11-25). Seconds, 0-60.
+ROLL_SETTLE_S="${NOVADA_MCP_ROLL_SETTLE_S:-12}"
+case "$ROLL_SETTLE_S" in ''|*[!0-9]*) echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1 ;; esac
+[ "$ROLL_SETTLE_S" -le 60 ] || { echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1; }
 ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
 DIRTY="$(git -C "$ROOT" status --porcelain -- hosted-server/vercel | grep -q . && echo -dirty || true)"
@@ -19,7 +26,7 @@ trap 'rm -f "$TAR"' EXIT
 COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -C "$SRC" --exclude node_modules --exclude dist --exclude .vercel --exclude '.env*' -czf "$TAR" .
 scp -q "$TAR" "$HOST:/tmp/novada-mcp-$REL.tgz"
 
-ssh "$HOST" REL="$REL" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
+ssh "$HOST" REL="$REL" NOVADA_MCP_ROLL_SETTLE_S="$ROLL_SETTLE_S" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
 set -euo pipefail
 # NOVADA_MCP_ROOT: test-only override (mirrors NOVADA_SKIP_HOSTED_FORCE's
 # convention in hosted-server/vercel/server.mts) -- defaults to the real
@@ -79,6 +86,11 @@ cd /
 # this round fixes, so "both one-at-a-time, must match" was considered and
 # rejected.
 INSTANCE_PORTS="3000 3001"
+# Re-validate remotely (defense in depth; this script also runs via test harnesses).
+ROLL_SETTLE_S="${NOVADA_MCP_ROLL_SETTLE_S:-12}"
+case "$ROLL_SETTLE_S" in ''|*[!0-9]*) echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1 ;; esac
+[ "$ROLL_SETTLE_S" -le 60 ] || { echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1; }
+settle() { [ "$ROLL_SETTLE_S" -gt 0 ] || return 0; echo "settling ${ROLL_SETTLE_S}s (nginx fail_timeout) before the next instance..." >&2; sleep "$ROLL_SETTLE_S"; }
 
 health_once() { curl -fsS -m 3 "http://127.0.0.1:$1${NOVADA_MCP_HEALTH_PATH:-/health/ready}" >/dev/null 2>&1; }
 # NOVADA_MCP_HEALTH_POLL_S: test-only override of the health-poll duration
@@ -147,6 +159,7 @@ converge_instance() {
   # health() poll it actually needs.
   if [ "$(instance_release "$port")" = "$target" ] && health_once "$port"; then
     echo "novada-mcp@${port} already running ${target} and healthy, skipping" >&2
+    LAST_CONVERGE_RESTARTED=0
     return 0
   fi
   sudo systemctl reset-failed "novada-mcp@${port}" 2>/dev/null || true
@@ -159,6 +172,7 @@ converge_instance() {
     return 1
   fi
   echo "novada-mcp@${port} OK, serving ${target}" >&2
+  LAST_CONVERGE_RESTARTED=1
   return 0
 }
 
@@ -182,7 +196,11 @@ if ! set_current "$R"; then
 fi
 
 FAILED_PORTS=""
+LAST_CONVERGE_RESTARTED=0
 for port in $INSTANCE_PORTS; do
+  # settle only after an instance was actually restarted (not skipped), and
+  # never before the first one — see ROLL_SETTLE_S above.
+  [ "$LAST_CONVERGE_RESTARTED" = 1 ] && settle
   if ! converge_instance "$port" "$R"; then
     FAILED_PORTS="$FAILED_PORTS $port"
   fi
