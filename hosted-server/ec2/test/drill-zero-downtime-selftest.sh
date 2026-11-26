@@ -44,18 +44,32 @@ run_scenario() {
   fi
 }
 
+# Bounded readiness wait for a local node fixture (2026-11-26): a fixed
+# `sleep 0.3` after starting it raced node's own startup on a loaded machine
+# (the drill's first probes got 000 = connection refused -> spurious
+# "always-up" failures). Poll until the port accepts a TCP connection (bare
+# connect via bash's /dev/tcp -- no HTTP request reaches the fixture), up to
+# 10 s at 0.1 s intervals; if it never does, record a FAIL and skip the scenario.
+wait_port() {
+  local port="$1" label="$2"
+  for _ in $(seq 1 100); do
+    (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && return 0
+    sleep 0.1
+  done
+  fail "$label: fixture on 127.0.0.1:$port never accepted a connection within 10s -- scenario not run"
+  return 1
+}
+
 # ─── Scenario 1: always-up single backend -> drill PASSES (exit 0) ─────────
 node "$SELF_DIR/fixtures/mock-backend.mjs" --port 18098 --mode up &
 PID1=$!
-sleep 0.3
-run_scenario "always-up" "http://127.0.0.1:18098" 2 0
+wait_port 18098 "always-up" && run_scenario "always-up" "http://127.0.0.1:18098" 2 0
 kill "$PID1" 2>/dev/null; wait "$PID1" 2>/dev/null
 
 # ─── Scenario 2: a ~1s 502 window -> drill FAILS (exit 1) ───────────────────
 node "$SELF_DIR/fixtures/mock-backend.mjs" --port 18099 --mode flaky &
 PID2=$!
-sleep 0.3
-run_scenario "502-window" "http://127.0.0.1:18099" 4 1
+wait_port 18099 "502-window" && run_scenario "502-window" "http://127.0.0.1:18099" 4 1
 kill "$PID2" 2>/dev/null; wait "$PID2" 2>/dev/null
 
 # ─── Scenario 3: nothing listening at all -> drill FAILS (exit 1) ──────────
@@ -78,8 +92,9 @@ PID_A=$!
 # "one real instance down" for the FULL window, not a transient blip.
 node "$SELF_DIR/fixtures/failover-proxy.mjs" --listen 18103 --targets 18101,18102 &
 PID_PROXY=$!
-sleep 0.3
-run_scenario "one-real-instance-down (failover covers it)" "http://127.0.0.1:18103" 3 0
+wait_port 18101 "one-real-instance-down (failover covers it)" \
+  && wait_port 18103 "one-real-instance-down (failover covers it)" \
+  && run_scenario "one-real-instance-down (failover covers it)" "http://127.0.0.1:18103" 3 0
 kill "$PID_A" "$PID_PROXY" 2>/dev/null
 wait "$PID_A" 2>/dev/null; wait "$PID_PROXY" 2>/dev/null
 

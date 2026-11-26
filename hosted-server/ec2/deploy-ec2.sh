@@ -69,6 +69,11 @@ cd /
 # precisely the case this redesign exists to protect against -- a bad
 # release caught on the second-iterated instance.
 #
+# The mirror case (review 2026-11-26, scenario F): if @3000 fails, the
+# deploy STOPS there -- @3001 is never restarted onto the release that just
+# failed; it keeps serving its previous release while only @3000 is rolled
+# back. Exit 1 either way (test/deploy-rollback-c2.sh covers both cases).
+#
 # Mixed-version decision (explicitly asked for, justified here): when only
 # one instance fails, the other is LEFT on the new release while the failed
 # one rolls back to its own prior release -- i.e. the two instances behind
@@ -198,22 +203,37 @@ if ! set_current "$R"; then
   exit 1
 fi
 
-FAILED_PORTS=""
+# Forward pass STOPS at the first instance that fails (review 2026-11-26,
+# scenario F): converging the next instance onto a release that has just
+# failed would put the bad release on it too -- both instances down until the
+# rollback below restored them. Every instance after the failed one is never
+# touched and keeps serving its previous release.
+FAILED_PORT=""
+CONVERGED_PORTS=""
+UNTOUCHED_PORTS=""
 LAST_CONVERGE_RESTARTED=0
 for port in $INSTANCE_PORTS; do
+  if [ -n "$FAILED_PORT" ]; then
+    UNTOUCHED_PORTS="$UNTOUCHED_PORTS novada-mcp@${port}"
+    continue
+  fi
   # settle only after an instance was actually restarted (not skipped), and
   # never before the first one — see ROLL_SETTLE_S above.
   [ "$LAST_CONVERGE_RESTARTED" = 1 ] && settle
-  if ! converge_instance "$port" "$R"; then
-    FAILED_PORTS="$FAILED_PORTS $port"
+  if converge_instance "$port" "$R"; then
+    CONVERGED_PORTS="$CONVERGED_PORTS novada-mcp@${port}"
+  else
+    FAILED_PORT="$port"
   fi
 done
 
-if [ -n "$FAILED_PORTS" ]; then
-  echo "DEPLOY FAILED on:${FAILED_PORTS} -- rolling back ONLY the failed instance(s); every instance already converged on $R is left untouched and stays up" >&2
+if [ -n "$FAILED_PORT" ]; then
+  echo "DEPLOY FAILED on novada-mcp@${FAILED_PORT} -- deploy stopped at this instance; rolling back ONLY novada-mcp@${FAILED_PORT} to its own prior release" >&2
+  echo "  already on $R before the failure (kept there, not rolled back):${CONVERGED_PORTS:- none}" >&2
+  echo "  never touched by this deploy (still serving their previous release):${UNTOUCHED_PORTS:- none}" >&2
   sudo journalctl -u novada-mcp@3000 -u novada-mcp@3001 -n 40 --no-pager >&2 || true
   ROLLBACK_OK=1
-  for port in $FAILED_PORTS; do
+  for port in $FAILED_PORT; do   # exactly one: the forward pass stopped at it
     target="${PREV_RELEASE[$port]}"
     if [ -z "$target" ]; then
       echo "novada-mcp@${port}: no known prior release recorded (first deploy to this instance?) -- cannot auto-rollback, manual intervention required" >&2
