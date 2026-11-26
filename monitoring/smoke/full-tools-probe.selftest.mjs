@@ -86,6 +86,11 @@ import { fileURLToPath } from "node:url";
 import {
   PROBES,
   assertExecutable,
+  classifyFailure,
+  runProbe,
+  isUpstreamThrottle,
+  throttleWaitMs,
+  resumeWaitMs,
   runAllProbes,
   preflightAssertAllProbesExecutable,
   adviceFor,
@@ -110,6 +115,28 @@ function stubCallTool(name, args) {
 
   // Generic-dispatcher poll calls: novada_scrape({ platform, operation, task_id }).
   if (name === "novada_scrape" && args && typeof args.task_id === "string") {
+    // 2026-11-26 (Layer D 11-26 false "①-mcp-code P0" on tiktok/ig/fb/linkedin):
+    // upstream RATE_LIMITED while the MCP polled the task status. The task was
+    // accepted (task_id in the message) — the probe must wait + resume, not fail.
+    if (args.task_id === "ddg-throttle-1") {
+      const n = callLog.filter((c) => c.name === "novada_scrape" && c.args?.task_id === "ddg-throttle-1").length;
+      if (n < 2) {
+        return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 300, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"ddg-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+      }
+      return Promise.resolve({
+        ok: true,
+        httpStatus: 200,
+        timeMs: 600,
+        text:
+          "## Scrape Results\nplatform: duckduckgo.com | operation: duckduckgo | records: 1 | source: live | format: json\n\n" +
+          '```json\n[{"title": "Claude — Anthropic", "link": "https://claude.com"}]\n```',
+        error: null,
+      });
+    }
+    if (args.task_id === "g-throttle-1") {
+      // Throttled on EVERY resume attempt -> upstream throttling, ③-backend, never ours.
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 300, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"g-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+    }
     if (args.task_id === "walmart-task-1") {
       // Poll completes with real records -> SLOW, not a failure. V3-N1/C-2
       // fix: PROBES now requests format:"json" for every scraper, and
@@ -198,6 +225,11 @@ function stubCallTool(name, args) {
   }
 
   switch (name) {
+    case "novada_scrape_duckduckgo":
+      // Initial call: task accepted, status poll throttled upstream (11-26 shape).
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 900, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"ddg-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+    case "novada_scrape":
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 900, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"g-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
     case "novada_setup":
       // Scenario 1: a plain pass.
       return Promise.resolve({ ok: true, httpStatus: 200, timeMs: 50, text: "novada_setup ok", error: null });
@@ -471,6 +503,85 @@ async function main() {
     expect(threw === !c.allowed, `assertExecutable(${c.name}, ${JSON.stringify(c.args)}) ${c.allowed ? "allowed" : "refused"} (threw=${threw})`);
   }
 
+  // ── 2026-11-26 review (H1, M1, M2, M3): throttle discrimination, unit level ─
+  console.log("\n[selftest] upstream-throttle discrimination (review H1)...");
+  const RL = (tid) => `Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests.${tid ? ` Resume with task_id="${tid}" instead of re-submitting — this does not incur a new charge.` : ""}\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000`;
+  const errRes = (msg, httpStatus = 200) => ({ ok: false, httpStatus, timeMs: 1, text: null, error: { toolError: true, message: msg } });
+  const scraperProbe = PROBES.find((p) => p.name === "novada_scrape_amazon");
+  const flakyProbe = PROBES.find((p) => p.name === "novada_scrape_x");
+  const coreProbe = PROBES.find((p) => p.name === "novada_search");
+  expect(isUpstreamThrottle(errRes(RL("t1"))) === true, "isUpstreamThrottle: HTTP 200 + leading [RATE_LIMITED] + task_id -> true");
+  expect(isUpstreamThrottle(errRes(RL("t1")), "t2") === false, "isUpstreamThrottle: task_id mismatch -> false");
+  expect(isUpstreamThrottle(errRes(RL(null))) === false, "isUpstreamThrottle: no task_id (could be our crash rewritten by classifyError) -> false");
+  expect(isUpstreamThrottle(errRes(RL("t1"), 429)) === false, "isUpstreamThrottle: HTTP 429 (our gateway limiter) -> false");
+  expect(isUpstreamThrottle(errRes(`Error [UNKNOWN]: boom. agent_instruction: see Error [RATE_LIMITED] docs task_id="t1"`)) === false, "isUpstreamThrottle: [RATE_LIMITED] not at a line start -> false (anchored)");
+  const c1 = classifyFailure(coreProbe, errRes(RL(null)));
+  expect(c1.domain === "①-mcp-code" && c1.severity === "P0", `classifyFailure: core tool, HTTP-200 RATE_LIMITED without task_id stays OURS P0 (got ${c1.domain}/${c1.severity})`);
+  const c2 = classifyFailure(scraperProbe, errRes(RL(null)));
+  expect(c2.domain === "①-mcp-code", `classifyFailure: scraper, RATE_LIMITED without task_id stays OURS (got ${c2.domain})`);
+  const c1b = classifyFailure(coreProbe, errRes(RL("t1")));
+  expect(c1b.domain === "①-mcp-code", `classifyFailure: NON-scraper tool stays OURS even if the text carries a task_id (review LOW-2) (got ${c1b.domain})`);
+  const c3 = classifyFailure(coreProbe, errRes("Too many requests from your IP. Please slow down.", 429));
+  expect(c3.domain !== "③-backend", `classifyFailure: gateway 429 stays ours (got ${c3.domain})`);
+  const c4 = classifyFailure(scraperProbe, errRes(RL("t9")));
+  expect(c4.domain === "③-backend" && c4.severity === "P2" && c4.throttled === true, `classifyFailure: scraper RATE_LIMITED WITH task_id -> ③ P2 throttled (got ${c4.domain}/${c4.severity})`);
+  expect(throttleWaitMs(errRes(RL("t")), 30000) === 30000 && throttleWaitMs(errRes(RL("t").replace("30000", "5000")), 30000) === 5000, "throttleWaitMs parses retry_after_ms");
+  expect(throttleWaitMs(errRes(RL("t").replace("30000", "90000")), 30000) === 30000, "throttleWaitMs caps at the cap");
+  expect(throttleWaitMs(errRes("Error [RATE_LIMITED]: x"), 30000) === 30000, "throttleWaitMs falls back to the cap when retry_after_ms is missing");
+  expect(resumeWaitMs({ lastThrottled: false, lastThrottleRes: null, processingPollIntervalMs: 10000, throttleWaitCapMs: 30000 }) === 10000, "resumeWaitMs: not throttled -> poll interval");
+  expect(resumeWaitMs({ lastThrottled: true, lastThrottleRes: errRes(RL("t").replace("30000", "5000")), processingPollIntervalMs: 10000, throttleWaitCapMs: 30000 }) === 10000, "resumeWaitMs: throttled -> never shorter than the poll interval");
+
+  // Sequence tests through the real runProbe with an injected sleep (exact waits).
+  async function runSeq(probe, initial, polls) {
+    const waits = [];
+    let i = 0;
+    const stub = (name) => Promise.resolve(name === "novada_scrape" ? polls[Math.min(i++, polls.length - 1)] : initial);
+    const row = await runProbe(probe, { callToolFn: stub, delayMs: 0, networkRetryBackoffMs: 0, processingPollMaxAttempts: 4, processingPollIntervalMs: 10000, throttleWaitCapMs: 30000, sleepFn: async (ms) => { waits.push(ms); } });
+    return { row, waits, polls: i };
+  }
+  const P = { ok: true, httpStatus: 200, timeMs: 1, text: 'status: processing\nrecords: 0\n⏳ Task still running (task_id="T").', error: null };
+  const T = errRes(RL("T"));
+  const T2 = errRes(RL("T").replace("30000", "5000"));
+  {
+    const { row, waits } = await runSeq(scraperProbe, T, [P, T, P, P]);
+    expect(row.status === "ASYNC" && row.domain === "-", `seq T|P,T,P,P -> ASYNC (got ${row.status}/${row.domain})`);
+    expect(JSON.stringify(waits) === JSON.stringify([30000, 10000, 30000, 10000]), `seq T|P,T,P,P waits = initial 30s, then 10s after P, 30s after T, 10s after P (got ${JSON.stringify(waits)})`);
+  }
+  {
+    const { row } = await runSeq(scraperProbe, P, [T, T, T, T]);
+    expect(row.status === "ASYNC", `review LOW-1: entry processing then 4 throttled resumes -> ASYNC (the task WAS seen processing) (got ${row.status}/${row.domain})`);
+  }
+  {
+    const { row } = await runSeq(scraperProbe, P, [P, P, P, T]);
+    expect(row.status === "ASYNC", `review M1: seq P|P,P,P,T (seen processing, throttled only at the end) -> ASYNC, not a backend FAIL (got ${row.status}/${row.domain})`);
+  }
+  {
+    const { row, waits } = await runSeq(scraperProbe, T, [T, T, T, T2]);
+    expect(row.status === "FAIL" && row.domain === "③-backend" && row.severity === "P2" && row.throttled === true, `seq T|T,T,T,T -> ③ P2 throttled (got ${row.status}/${row.domain}/${row.severity})`);
+    expect(/all 4 resume attempt/.test(row.error), `throttled-to-the-end error states the true count (got ${row.error})`);
+    expect(JSON.stringify(waits) === JSON.stringify([30000, 30000, 30000, 30000]), `seq T|T,T,T,T waits 30s before every resume (got ${JSON.stringify(waits)})`);
+  }
+  {
+    const { row } = await runSeq(flakyProbe, T, [T, T, T, T]);
+    expect(row.domain === "③-backend" && row.severity === "P3" && row.throttled === true, `review M2: known-flaky platform throttled to the end stays P3 (got ${row.domain}/${row.severity})`);
+  }
+  {
+    const OTHER = errRes(RL("OTHER-TASK"));
+    const { row } = await runSeq(scraperProbe, T, [OTHER, OTHER, OTHER, OTHER]);
+    expect(row.status === "FAIL" && row.domain === "①-mcp-code" && !row.throttled, `a RATE_LIMITED poll naming a DIFFERENT task_id is not our task's throttle -> ours, fail closed (got ${row.status}/${row.domain}/throttled=${row.throttled})`);
+  }
+
+  // Review L1 (unit): escalation ignores throttled rows; a control set does escalate.
+  {
+    const mk = (platform, throttled) => ({ name: `t_${platform}`, platform, domain: "③-backend", severity: "P2", status: "FAIL", throttled, note: "x" });
+    const thr = ["a.com", "b.com", "c.com", "d.com"].map((pl) => mk(pl, true));
+    applySeverityEscalations(thr);
+    expect(thr.every((r) => r.severity === "P2" && !r.note.includes("[escalated")), "4 THROTTLED ③ platforms do not trigger the systemic-outage escalation");
+    const ctl = ["a.com", "b.com", "c.com", "d.com"].map((pl) => mk(pl, false));
+    applySeverityEscalations(ctl);
+    expect(ctl.every((r) => r.severity === "P1" && r.note.includes("[escalated")), "control: 4 non-throttled ③ platforms DO escalate to P1");
+  }
+
   console.log("\n[selftest] running the full pipeline (runAllProbes) against a stubbed, offline callTool/listTools...");
   const { results } = await runAllProbes(PROBES, {
     callToolFn: stubCallTool,
@@ -483,6 +594,7 @@ async function main() {
     // milliseconds, not tens of seconds.
     processingPollMaxAttempts: 4,
     processingPollIntervalMs: 0,
+    throttleWaitCapMs: 0,
   });
 
   console.log("");
@@ -514,6 +626,8 @@ async function main() {
     { name: "novada_scrape_google", status: "FAIL", domain: "③-backend", severity: "P2", why: 'scraper 50004 "context deadline exceeded" backend timeout on a NON-flaky platform (2026-07-28 fix: must be ③, not ①)' },
     { name: "novada_search", status: "FAIL", domain: "②-gateway", severity: "P0", why: "2026-07-30 free-gateway-cap error on a CORE tool (must be ②/P0, not ①-mcp-code)" },
     { name: "novada_scrape_yandex", status: "FAIL", domain: "②-gateway", severity: "P1", why: "the SAME free-gateway-cap error on a KNOWN-FLAKY platform, httpStatus 0 (must be ②/P1, NOT swallowed into ③-backend/P3)" },
+    { name: "novada_scrape_duckduckgo", status: "SLOW", domain: "-", severity: null, why: "2026-11-26: upstream RATE_LIMITED with task_id -> wait + resume; throttled once more, then resolves -> SLOW, never ①-mcp-code" },
+    { name: "novada_scrape", status: "FAIL", domain: "③-backend", severity: "P2", why: "2026-11-26: throttled upstream on EVERY resume attempt -> upstream throttling ③/P2, never ①-mcp-code P0" },
   ];
 
   console.log("");
@@ -529,6 +643,24 @@ async function main() {
     );
   }
 
+  // 2026-11-24/26: resume calls must carry the originating probe's format
+  // (format:"json"); without it the resumed result renders as a markdown
+  // table and the substance gate misreads it as "no parsable JSON record
+  // array" -> false ③ on amazon/walmart/x.
+  const pollCalls = callLog.filter((c) => c.name === "novada_scrape" && typeof c.args?.task_id === "string");
+  expect(pollCalls.length > 0, `resume calls were exercised (${pollCalls.length})`);
+  expect(
+    pollCalls.every((c) => c.args.format === "json"),
+    `every resume call carries format:"json" (missing on: ${JSON.stringify([...new Set(pollCalls.filter((c) => c.args.format !== "json").map((c) => c.args.task_id))])})`
+  );
+
+  const genericPolls = pollCalls.filter((c) => c.args.task_id === "g-throttle-1");
+  expect(genericPolls.length > 0 && genericPolls.every((c) => c.args.limit === 1), `generic novada_scrape resumes carry limit:1 (got ${JSON.stringify(genericPolls.map((c) => c.args.limit))})`);
+  expect(
+    callLog.filter((c) => c.name === "novada_scrape" && c.args?.task_id === "walmart-task-1").every((c) => c.args.limit === 1),
+    "walmart resumes carry limit:1"
+  );
+
   // TOW2-257 Phase 4: run the SAME post-processing main() applies
   // (applySeverityEscalations, which also computes `.advice` via adviceFor,
   // then buildSummary) over these exact results, so the assertions below
@@ -537,6 +669,12 @@ async function main() {
   // because every scenario assertion above already ran and does not re-read
   // these rows afterward.
   applySeverityEscalations(results);
+  // Review L1: throttled rows never feed the "≥4 platforms = systemic outage"
+  // escalation, and this fixture set is deliberately below that threshold.
+  const throttledRows = results.filter((r) => r.throttled);
+  expect(throttledRows.length >= 1 && throttledRows.every((r) => !String(r.note).includes("[escalated")), `throttled rows are never escalated (${throttledRows.map((r) => r.name).join(",")})`);
+  const escalatableBackend = new Set(results.filter((r) => r.domain === "③-backend" && r.platform && r.platform !== "-" && !r.throttled).map((r) => r.platform));
+  expect(escalatableBackend.size < 4 && !results.some((r) => String(r.note).includes("distinct backend platforms failing")), `fixture backend platforms (excl. throttled) stay below the escalation threshold: ${[...escalatableBackend].join(",")}`);
   const summary = buildSummary(results);
   const asyncRows = results.filter((r) => r.status === "ASYNC");
 

@@ -139,7 +139,7 @@ failures — a SEVERITY:
 |--------|---------|----------|
 | `①-mcp-code` | Ours: a validation/logic bug in this repo's tool wrappers, or a probe tool missing from `tools/list` | bad operation id, missing required param, tool removed from hosted deploy |
 | `②-gateway` | Ours: the hosted Vercel wrapper/gateway, not the tool logic itself | HTTP 5xx, a client-abort timeout with no backend error surfaced, version desync, research no-streaming |
-| `③-backend` | Not ours: the Novada Scraper API backend | `维护中`/520/`API_DOWN`/"Scraper API error (HTTP undefined)"/activation errors, a known-flaky platform (TOW2-305) failing, or a scraper task still stuck after one poll |
+| `③-backend` | Not ours: the Novada Scraper API backend | `维护中`/520/`API_DOWN`/"Scraper API error (HTTP undefined)"/activation errors, a known-flaky platform (TOW2-305) failing, a scraper task still stuck after one poll, or the API throttling an accepted task on every resume (`Error [RATE_LIMITED]` + `task_id`; marked `throttled`, never escalated as a systemic outage — without the `task_id` it stays ours) |
 | `-` | Pass | — |
 
 | Severity | Meaning |

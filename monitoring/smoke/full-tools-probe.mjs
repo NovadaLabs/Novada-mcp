@@ -72,8 +72,16 @@
  *      extracts the `task_id="..."` and RESUMES up to
  *      PROCESSING_POLL_MAX_ATTEMPTS times (default 4, ~10s apart between
  *      attempts) via the generic
- *      `novada_scrape({ platform, operation: <catalog id>, task_id })` —
- *      free, no re-charge. On any attempt: `records >= 1` → SLOW (works,
+ *      `novada_scrape({ platform, operation: <catalog id>, task_id, format,
+ *      limit })` (format/limit carried from the original call — without
+ *      format:"json" a finished task renders as markdown and fails the
+ *      substance gate) — free, no re-charge. An upstream throttle of the
+ *      accepted task (HTTP 200 `Error [RATE_LIMITED]` + task_id, see
+ *      THROTTLE_WAIT_CAP_MS) enters the same loop after waiting
+ *      retry_after_ms (cap 30 s); throttled polls wait up to 30 s instead of
+ *      ~10 s, so the added sleep is up to ~120 s on that path. Throttled on
+ *      EVERY attempt -> ③ via classifyFailure (P2, known-flaky P3); seen
+ *      processing at least once -> ASYNC like any slow task. On any attempt: `records >= 1` → SLOW (works,
  *      just needed N poll(s)); a poll that resolves to a genuine Failed
  *      outcome (isError, e.g. a Novada-side task error code) → domain
  *      ③-backend FAIL immediately, no further attempts. STILL `status:
@@ -163,14 +171,34 @@ const NETWORK_RETRY_BACKOFF_MS = 1000;
 // sleeping PROCESSING_POLL_INTERVAL_MS between attempts (never before the
 // first — the initial submit call already spent time getting to
 // "processing"). This bounds this script's OWN added sleep budget to
-// (PROCESSING_POLL_MAX_ATTEMPTS - 1) * PROCESSING_POLL_INTERVAL_MS ≈ 30s,
-// plus each resume call's own round-trip (bounded total ≈40-50s in the
-// common case) — the number of network round-trips is capped at N
+// (PROCESSING_POLL_MAX_ATTEMPTS - 1) * PROCESSING_POLL_INTERVAL_MS ≈ 30s on
+// the processing path — up to ≈120s on the upstream-throttle path (an initial
+// wait plus up to 30s before each resume; see THROTTLE_WAIT_CAP_MS) — plus
+// each resume call's own round-trip (bounded total ≈40-50s in the common
+// processing case) — the number of network round-trips is capped at N
 // regardless of how long any single one takes. Both overridable via
 // runProbe/runAllProbes' deps so the offline self-test can shrink these to
 // ~0 and run in milliseconds instead of tens of seconds.
 const PROCESSING_POLL_MAX_ATTEMPTS = 4;
 const PROCESSING_POLL_INTERVAL_MS = 10000;
+// 2026-11-26: upstream throttling. When the Novada API throttles the MCP's
+// task-status poll, the tool returns HTTP 200 + isError `Error [RATE_LIMITED]`
+// carrying the already-accepted task_id and `retry_after_ms`. That is the
+// upstream asking us to wait and resume — not a failure of our code. Wait at
+// most this long before each resume while throttled.
+//
+// DISCRIMINATOR (review H1, 2026-11-26): HTTP 200 + `[RATE_LIMITED]` is NOT
+// enough — the hosted catch-all runs classifyError() on every unstructured
+// error, and its substring rule (msg includes "429", or "rate" and "limit")
+// rewrites OUR OWN crashes (e.g. "reading 'rateLimit'", "limit must be <= 100")
+// into the same `Error [RATE_LIMITED]` text at HTTP 200. Only a scraper error
+// that STARTS with `Error [RATE_LIMITED]:` AND carries the accepted
+// `task_id="…"` (classifyScraperHttpError's resume note) is an upstream
+// throttle of a task we already submitted. Everything else falls through to
+// the normal rules (which fail closed to ours). Our gateway limiter answers
+// HTTP 429 and is unaffected.
+const THROTTLE_WAIT_CAP_MS = 30000;
+const UPSTREAM_THROTTLE_RE = /^Error \[RATE_LIMITED\]:/m;
 
 // Core tools whose failure alone can legitimately be called "endpoint-wide"
 // (P0), per the brief's severity rubric — everything else that fails on our
@@ -616,6 +644,33 @@ function isProcessingText(text) {
 }
 
 /**
+ * Upstream throttle of an ACCEPTED scraper task: HTTP 200 + isError starting
+ * `Error [RATE_LIMITED]:` + `task_id="…"` (see THROTTLE_WAIT_CAP_MS). When
+ * `expectTaskId` is given, the task_id must match it.
+ */
+function isUpstreamThrottle(res, expectTaskId = null) {
+  if (!res || res.ok || res.httpStatus !== 200) return false;
+  const msg = errorText(res);
+  if (!UPSTREAM_THROTTLE_RE.test(msg)) return false;
+  const tid = extractTaskId(msg);
+  if (!tid) return false;
+  return expectTaskId == null || tid === expectTaskId;
+}
+
+/** `retry_after_ms: N` from a structured error, capped; falls back to the cap. */
+function throttleWaitMs(res, capMs) {
+  const m = errorText(res).match(/retry_after_ms:\s*(\d+)/);
+  const asked = m ? Number(m[1]) : capMs;
+  return Math.max(0, Math.min(asked, capMs));
+}
+
+/** Wait before the next resume attempt: throttled → the upstream's retry_after (capped), never shorter than the normal poll interval. */
+function resumeWaitMs({ lastThrottled, lastThrottleRes, processingPollIntervalMs, throttleWaitCapMs }) {
+  if (!lastThrottled) return processingPollIntervalMs;
+  return Math.max(processingPollIntervalMs, throttleWaitMs(lastThrottleRes, throttleWaitCapMs));
+}
+
+/**
  * Call a tool, retrying ONCE with a short backoff if the result is a
  * network-level failure (httpStatus === 0 — no HTTP response was ever
  * received). This covers BOTH a genuine client-abort timeout AND a
@@ -713,6 +768,13 @@ const BACKEND_SIGNAL_RE =
  *      returned P2, even for a documented-chronic-flake platform).
  *   4. Scraper task still stuck after the one poll attempt (non-flaky
  *      platform) -> ③-backend, P2.
+ *   4b. (2026-11-26) Scraper error starting `Error [RATE_LIMITED]:` that
+ *      carries the accepted `task_id="…"` (and matches the expected task
+ *      when one is known) -> ③-backend P2, `throttled: true` (excluded from
+ *      the ≥4-platform escalation). Without the task_id it is NOT treated as
+ *      upstream: the hosted catch-all's classifyError substring rule can
+ *      rewrite our own crashes into the same text at HTTP 200 — falls
+ *      through to the rules below (fail closed to ours).
  *   5. Our own validation/logic error text (bad op id, missing required
  *      param, etc.) -> ①-mcp-code — this is OUR schema/preflight, not theirs.
  *   6. HTTP 5xx, or ANY network-level failure (httpStatus === 0, whether or
@@ -739,7 +801,7 @@ const BACKEND_SIGNAL_RE =
  * @param {{httpStatus: number, error: unknown}} res
  * @param {{stillProcessingAfterPoll?: boolean}} [opts]
  */
-function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) {
+function classifyFailure(probe, res, { stillProcessingAfterPoll = false, expectTaskId = null } = {}) {
   const msg = errorText(res);
   const httpStatus = res.httpStatus;
   const isCore = CORE_TOOL_NAMES.has(probe.name);
@@ -783,6 +845,15 @@ function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) 
 
   if (stillProcessingAfterPoll) {
     return { domain: "③-backend", severity: "P2", note: "scraper task still processing/unresolved after one poll" };
+  }
+
+  if (probe.isScraper && isUpstreamThrottle(res, expectTaskId)) {
+    return {
+      domain: "③-backend",
+      severity: "P2",
+      throttled: true,
+      note: "upstream throttled (Novada API RATE_LIMITED on an accepted task, HTTP 200) — not ours; our own gateway limiter answers HTTP 429",
+    };
   }
 
   if (OURS_VALIDATION_RE.test(msg)) {
@@ -831,6 +902,9 @@ function adviceFor(row) {
       const label = SUBSTANCE_TABLE[row.catalogOpId]?.label ?? "usable data";
       return `Backend reported records>=1 but returned no ${label} substance (bare/schema-mismatched envelope) — flag to Novada backend (灵匠) as a data-quality incident on catalogOpId="${row.catalogOpId}", not an MCP bug.`;
     }
+    if (typeof row.note === "string" && row.note.includes("upstream throttled")) {
+      return "Novada API throttled the monitoring key (RATE_LIMITED) — not an MCP bug; if it repeats daily, ask the backend for the key's rate limits.";
+    }
     if (typeof row.note === "string" && row.note.includes("still processing")) {
       return "Backend task never completed after one poll — flag to Novada backend (灵匠) as a stuck/slow task, not an MCP bug.";
     }
@@ -874,6 +948,8 @@ async function runProbe(
     networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS,
     processingPollMaxAttempts = PROCESSING_POLL_MAX_ATTEMPTS,
     processingPollIntervalMs = PROCESSING_POLL_INTERVAL_MS,
+    throttleWaitCapMs = THROTTLE_WAIT_CAP_MS,
+    sleepFn = sleep, // injectable so the selftest can assert wait durations
   } = {}
 ) {
   const base = {
@@ -915,8 +991,11 @@ async function runProbe(
 
   // Processing→poll disambiguation (scrape-family only, and only on the CLEAN
   // "still processing" outcome — never on a genuine isError failure).
-  if (probe.isScraper && res.ok && isProcessingText(res.text)) {
-    const taskId = extractTaskId(res.text);
+  // ...or the upstream-throttle shape that still carries the accepted task_id
+  // (2026-11-26): resume it exactly like a processing task, after waiting.
+  const throttledTaskId = probe.isScraper && isUpstreamThrottle(res) ? extractTaskId(errorText(res)) : null;
+  if (probe.isScraper && ((res.ok && isProcessingText(res.text)) || throttledTaskId)) {
+    const taskId = throttledTaskId ?? extractTaskId(res.text);
 
     if (!taskId) {
       // HIGH FIX (code review 2026-07-24): the "processing" wording is OUR
@@ -942,8 +1021,29 @@ async function runProbe(
       };
     }
 
-    const pollArgs = { platform: probe.resumePlatform, operation: probe.catalogOpId, task_id: taskId };
+    // Carry the originating call's format/limit: without format:"json" the
+    // resumed result renders as a markdown table and the substance gate
+    // misreads it as "no parsable JSON record array" (2026-11-24/26 false ③
+    // on amazon/walmart/x — verified: same finished task, json fence only
+    // with format:"json").
+    const pollArgs = {
+      platform: probe.resumePlatform,
+      operation: probe.catalogOpId,
+      task_id: taskId,
+      ...(probe.args?.format ? { format: probe.args.format } : {}),
+      ...(probe.args?.limit ? { limit: probe.args.limit } : {}),
+    };
     assertExecutable("novada_scrape", pollArgs);
+    if (throttledTaskId) {
+      const w = throttleWaitMs(res, throttleWaitCapMs);
+      if (w > 0) await sleepFn(w);
+    }
+    let lastThrottled = false;
+    let lastThrottleRes = throttledTaskId ? res : null;
+    let throttledPolls = 0;
+    // The entry response itself counts: if it was "processing" (not a
+    // throttle), we have already seen the task's state (review LOW-1).
+    let sawProcessing = !throttledTaskId;
 
     // Resume up to processingPollMaxAttempts times, ~processingPollIntervalMs
     // apart (see the PROCESSING_POLL_MAX_ATTEMPTS doc comment above). Each
@@ -953,9 +1053,20 @@ async function runProbe(
     // the clock — falling through to the ASYNC bucket below — when every
     // attempt comes back still processing.
     for (let attempt = 1; attempt <= processingPollMaxAttempts; attempt += 1) {
-      if (attempt > 1 && processingPollIntervalMs > 0) await sleep(processingPollIntervalMs);
+      if (attempt > 1) {
+        const wait = resumeWaitMs({ lastThrottled, lastThrottleRes, processingPollIntervalMs, throttleWaitCapMs });
+        if (wait > 0) await sleepFn(wait);
+      }
 
       const pollRes = await callToolWithNetworkRetry("novada_scrape", pollArgs, { timeoutMs: 90000 }, callToolFn, networkRetryBackoffMs);
+
+      if (isUpstreamThrottle(pollRes, taskId)) {
+        lastThrottled = true;
+        lastThrottleRes = pollRes;
+        throttledPolls += 1;
+        continue; // throttled again — wait and resume, never a ours-domain failure
+      }
+      lastThrottled = false;
 
       if (pollRes.ok) {
         const pollRecords = extractRecordsCount(pollRes.text);
@@ -966,7 +1077,7 @@ async function runProbe(
           // duckduckgo failure mode) must classify ③-backend/P2, never SLOW.
           const substance = checkScraperSubstance(probe.catalogOpId, pollRes.text);
           if (substance.ok) {
-            if (delayMs > 0) await sleep(delayMs);
+            if (delayMs > 0) await sleepFn(delayMs);
             return {
               ...base,
               status: "SLOW",
@@ -980,7 +1091,7 @@ async function runProbe(
               note: `needed ${attempt} poll(s) (task_id="${taskId}") to resolve with ${pollRecords} record(s)`,
             };
           }
-          if (delayMs > 0) await sleep(delayMs);
+          if (delayMs > 0) await sleepFn(delayMs);
           return {
             ...base,
             status: "FAIL",
@@ -996,12 +1107,13 @@ async function runProbe(
           };
         }
         if (isProcessingText(pollRes.text)) {
+          sawProcessing = true;
           continue; // still processing — try again (or fall through to ASYNC below)
         }
         // ok, not "processing" anymore, but not enough records either (e.g.
         // the task "completed" server-side with zero usable items) — same
         // terminal ③-backend classification the single-poll code used.
-        if (delayMs > 0) await sleep(delayMs);
+        if (delayMs > 0) await sleepFn(delayMs);
         const cls = classifyFailure(probe, res, { stillProcessingAfterPoll: true });
         return {
           ...base,
@@ -1009,6 +1121,7 @@ async function runProbe(
           domain: cls.domain,
           severity: cls.severity,
           configFault: cls.configFault ?? false,
+          throttled: cls.throttled ?? false,
           httpStatus: res.httpStatus,
           timeMs: res.timeMs,
           records: pollRecords ?? 0,
@@ -1023,19 +1136,45 @@ async function runProbe(
       // code, an auth failure, a network failure, etc.), never "still
       // processing" — classify it like any other failure, immediately, no
       // more attempts.
-      if (delayMs > 0) await sleep(delayMs);
-      const cls = classifyFailure(probe, pollRes, {});
+      if (delayMs > 0) await sleepFn(delayMs);
+      const cls = classifyFailure(probe, pollRes, { expectTaskId: taskId });
       return {
         ...base,
         status: "FAIL",
         domain: cls.domain,
         severity: cls.severity,
         configFault: cls.configFault ?? false,
+        throttled: cls.throttled ?? false,
         httpStatus: pollRes.httpStatus,
         timeMs: pollRes.timeMs,
         records: 0,
         taskId,
         error: `task_id="${taskId}" resumed to a Failed outcome after ${attempt} poll(s) (${cls.note}): ${errorText(pollRes) || "(no error message)"}`,
+        note: cls.note,
+      };
+    }
+
+    // Throttled on the last resume attempt(s): we never got to read the task.
+    // Upstream throttling of our monitoring key — ③-backend, not ours.
+    // Review M1/M2: only when EVERY resume attempt was throttled (we never once
+    // saw the task's state) is this an upstream-throttle finding; a task that was
+    // seen processing and merely throttled at the end is ASYNC like any slow
+    // task. Classified through classifyFailure so known-flaky stays P3.
+    if (lastThrottled && !sawProcessing && throttledPolls === processingPollMaxAttempts) {
+      if (delayMs > 0) await sleepFn(delayMs);
+      const cls = classifyFailure(probe, lastThrottleRes, {});
+      return {
+        ...base,
+        status: "FAIL",
+        domain: cls.domain,
+        severity: cls.severity,
+        configFault: cls.configFault ?? false,
+        throttled: true,
+        httpStatus: res.httpStatus,
+        timeMs: res.timeMs,
+        records: 0,
+        taskId,
+        error: `task_id="${taskId}": upstream RATE_LIMITED on all ${throttledPolls} resume attempt(s)`,
         note: cls.note,
       };
     }
@@ -1047,7 +1186,7 @@ async function runProbe(
     // ours-domain (①/②) or backend (③) failure downstream, and never fails
     // the run's exit code (see main()'s oursP0P1 computation, which only
     // inspects domain ①/②).
-    if (delayMs > 0) await sleep(delayMs);
+    if (delayMs > 0) await sleepFn(delayMs);
     return {
       ...base,
       status: "ASYNC",
@@ -1111,6 +1250,7 @@ async function runProbe(
     domain: cls.domain,
     severity: cls.severity,
     configFault: cls.configFault ?? false,
+    throttled: cls.throttled ?? false,
     httpStatus: res.httpStatus,
     timeMs: res.timeMs,
     records: null,
@@ -1139,6 +1279,7 @@ async function runAllProbes(
     networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS,
     processingPollMaxAttempts = PROCESSING_POLL_MAX_ATTEMPTS,
     processingPollIntervalMs = PROCESSING_POLL_INTERVAL_MS,
+    throttleWaitCapMs = THROTTLE_WAIT_CAP_MS,
   } = {}
 ) {
   const liveTools = await listToolsFn();
@@ -1167,7 +1308,7 @@ async function runAllProbes(
       });
       continue;
     }
-    const row = await runProbe(probe, { callToolFn, delayMs, networkRetryBackoffMs, processingPollMaxAttempts, processingPollIntervalMs });
+    const row = await runProbe(probe, { callToolFn, delayMs, networkRetryBackoffMs, processingPollMaxAttempts, processingPollIntervalMs, throttleWaitCapMs });
     results.push(row);
     if (delayMs > 0) await sleep(delayMs);
   }
@@ -1198,12 +1339,13 @@ function applySeverityEscalations(results) {
     }
   }
 
-  const backendFailingPlatforms = new Set(
-    results.filter((r) => r.domain === "③-backend" && r.platform && r.platform !== "-").map((r) => r.platform)
-  );
+  // Throttled rows are excluded (review L1): one key-level throttle across N
+  // platforms is not a "systemic outage" and must not headline as P1.
+  const isEscalatableBackend = (r) => r.domain === "③-backend" && r.platform && r.platform !== "-" && !r.throttled;
+  const backendFailingPlatforms = new Set(results.filter(isEscalatableBackend).map((r) => r.platform));
   if (backendFailingPlatforms.size >= MANY_TOOLS_THRESHOLD) {
     for (const r of results) {
-      if (r.domain === "③-backend" && r.platform && r.platform !== "-") {
+      if (isEscalatableBackend(r)) {
         r.severity = "P1";
         r.note = `${r.note ? r.note + " " : ""}[escalated: ${backendFailingPlatforms.size} distinct backend platforms failing at once — possible systemic Novada Scraper API outage]`;
       }
@@ -1474,6 +1616,10 @@ if (isDirectRun) {
 
 export {
   PROBES,
+  isUpstreamThrottle,
+  throttleWaitMs,
+  resumeWaitMs,
+  THROTTLE_WAIT_CAP_MS,
   CORE_TOOL_NAMES,
   MANY_TOOLS_THRESHOLD,
   NETWORK_RETRY_BACKOFF_MS,
