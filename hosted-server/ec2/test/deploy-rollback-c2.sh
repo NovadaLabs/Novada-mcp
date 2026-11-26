@@ -35,6 +35,12 @@
 #     its output explicitly names @3001 as rolled back and @3000 as
 #     untouched.
 #
+# Scenario F (section 8, review 2026-11-26) — the mirror case: @3000 fails
+# on NEWREL. The deploy must STOP there: @3001 is never restarted and keeps
+# serving PREV, only @3000 is rolled back to its own PREV, `current` ends on
+# PREV, exit 1, and the operator message names @3000 as failed and @3001 as
+# never touched.
+#
 # Usage: ./deploy-rollback-c2.sh   (exit 0 = PASS; prints a FAIL line and
 # exits 1 on the first violated assertion)
 set -uo pipefail
@@ -419,10 +425,76 @@ for s in "$DEPLOY_SCRIPT" "$(dirname "$DEPLOY_SCRIPT")/restart-rolling.sh"; do
   fi
 done
 
+# ─── 8. Scenario F (review 2026-11-26): the FIRST instance fails ───────────
+# A release that fails on @3000 must NOT then be put on @3001 as well (that
+# takes BOTH instances off the old release until the rollback restores them).
+# Expected: the deploy stops at @3000, rolls back ONLY @3000 to its own prior
+# release, @3001 is never restarted and keeps serving PREV, exit 1, and the
+# operator message names @3000 as failed and @3001 as untouched.
+set +e   # section 7 leaves errexit on; this harness checks exit codes itself
+echo "--- scenario F: first instance (@3000) fails on NEWREL ---" >&2
+for port in 3000 3001; do   # reset: both instances back on PREV, fresh state
+  [ -f "$STATE/port-${port}.pid" ] && kill "$(cat "$STATE/port-${port}.pid")" 2>/dev/null
+done
+rm -f "$STATE"/port-*.pid "$STATE"/pid-*.cwd "$STATE"/restart-count-* "$STATE"/health-fail-* "$STATE/curl-urls"
+ln -sfn "$ROOT/releases/PREV" "$ROOT/current"
+for port in 3000 3001; do
+  ( exec sleep 600 ) &
+  pid=$!
+  disown "$pid" 2>/dev/null || true
+  echo "$pid" > "$STATE/port-${port}.pid"
+  echo "$ROOT/releases/PREV" > "$STATE/pid-${pid}.cwd"
+done
+PID_3001_BEFORE="$(cat "$STATE/port-3001.pid")"
+touch "$STATE/health-fail-3000-${NEWREL_MARKER_KEY}"
+
+OUT_F="$SANDBOX/output-first-fail.log"
+PATH="$BIN:$PATH" "$RUNNER_BASH" "$RUNNER" >"$OUT_F" 2>&1
+RC_F=$?
+cat "$OUT_F" >&2
+echo "--- end scenario F output (exit code $RC_F) ---" >&2
+
+assert_eq "[F] exit code (stopped deploy is a reported failure)" "1" "$RC_F"
+assert_eq "[F] @3001 restart count (never touched)" "0" "$(cat "$STATE/restart-count-3001" 2>/dev/null || echo 0)"
+PID_3001_F="$(cat "$STATE/port-3001.pid")"
+assert_eq "[F] @3001 is the same process as before the deploy" "$PID_3001_BEFORE" "$PID_3001_F"
+assert_eq "[F] @3001 still serving PREV" "$ROOT/releases/PREV" "$(cat "$STATE/pid-${PID_3001_F}.cwd" 2>/dev/null)"
+assert_eq "[F] @3000 restart count (forward attempt + rollback)" "2" "$(cat "$STATE/restart-count-3000" 2>/dev/null || echo 0)"
+PID_3000_F="$(cat "$STATE/port-3000.pid")"
+assert_eq "[F] @3000 rolled back to its own PREV" "$ROOT/releases/PREV" "$(cat "$STATE/pid-${PID_3000_F}.cwd" 2>/dev/null)"
+assert_eq "[F] current symlink back on PREV" "$ROOT/releases/PREV" "$(readlink "$ROOT/current")"
+if grep -q "ROLLBACK OK for novada-mcp@3000" "$OUT_F"; then
+  echo "ok: [F] output reports @3000 rolled back OK" >&2
+else
+  fail "[F] output does not report ROLLBACK OK for novada-mcp@3000"
+fi
+F_MSG1="DEPLOY FAILED on novada-mcp@3000 -- deploy stopped at this instance; rolling back ONLY novada-mcp@3000 to its own prior release"
+F_MSG2="  already on $ROOT/releases/NEWREL before the failure (kept there, not rolled back): none"
+F_MSG3="  never touched by this deploy (still serving their previous release): novada-mcp@3001"
+for m in "$F_MSG1" "$F_MSG2" "$F_MSG3"; do
+  if grep -qxF "$m" "$OUT_F"; then
+    echo "ok: [F] operator message line present: [$m]" >&2
+  else
+    fail "[F] operator message line missing: [$m]"
+  fi
+done
+if grep -q "settling" "$OUT_F" || grep -q "^DEPLOYED" "$OUT_F"; then
+  fail "[F] a stopped deploy must neither settle nor report DEPLOYED"
+else
+  echo "ok: [F] no settle and no DEPLOYED line" >&2
+fi
+# The C2 run (section 5) names the already-converged instance in the same message.
+if grep -qxF "  already on $ROOT/releases/NEWREL before the failure (kept there, not rolled back): novada-mcp@3000" "$OUTPUT" \
+   && grep -qxF "  never touched by this deploy (still serving their previous release): none" "$OUTPUT"; then
+  echo "ok: C2 run's failure message lists @3000 as kept on NEWREL and nothing untouched" >&2
+else
+  fail "C2 run's failure message does not list @3000 as kept on NEWREL / untouched=none"
+fi
+
 echo "" >&2
 if [ "$FAILURES" -gt 0 ]; then
   echo "C2 REGRESSION TEST FAILED: $FAILURES assertion(s) failed" >&2
   exit 1
 fi
-echo "C2 REGRESSION TEST PASSED: rollback touched only the failed instance; the healthy one was never restarted"
+echo "C2 REGRESSION TEST PASSED: rollback touched only the failed instance; the healthy one was never restarted; a first-instance failure stops the deploy before the next instance"
 exit 0
