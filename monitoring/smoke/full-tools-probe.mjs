@@ -171,6 +171,14 @@ const NETWORK_RETRY_BACKOFF_MS = 1000;
 // ~0 and run in milliseconds instead of tens of seconds.
 const PROCESSING_POLL_MAX_ATTEMPTS = 4;
 const PROCESSING_POLL_INTERVAL_MS = 10000;
+// 2026-11-26: upstream throttling. When the Novada API throttles the MCP's
+// task-status poll, the tool returns HTTP 200 + isError `Error [RATE_LIMITED]`
+// carrying the already-accepted task_id and `retry_after_ms`. That is the
+// upstream asking us to wait and resume — not a failure of our code. Wait at
+// most this long before each resume while throttled. (Our OWN gateway limiter
+// answers HTTP 429 instead, so the HTTP-200 shape is unambiguous.)
+const THROTTLE_WAIT_CAP_MS = 30000;
+const UPSTREAM_THROTTLE_RE = /\[RATE_LIMITED\]/;
 
 // Core tools whose failure alone can legitimately be called "endpoint-wide"
 // (P0), per the brief's severity rubric — everything else that fails on our
@@ -615,6 +623,18 @@ function isProcessingText(text) {
   return /status:\s*processing/i.test(text) && /records:\s*0\b/i.test(text);
 }
 
+/** True for the upstream-throttle shape: HTTP 200 + isError `Error [RATE_LIMITED]` (see THROTTLE_WAIT_CAP_MS). */
+function isUpstreamThrottle(res) {
+  return Boolean(res) && !res.ok && res.httpStatus === 200 && UPSTREAM_THROTTLE_RE.test(errorText(res));
+}
+
+/** `retry_after_ms: N` from a structured error, capped; falls back to the cap. */
+function throttleWaitMs(res, capMs) {
+  const m = errorText(res).match(/retry_after_ms:\s*(\d+)/);
+  const asked = m ? Number(m[1]) : capMs;
+  return Math.max(0, Math.min(asked, capMs));
+}
+
 /**
  * Call a tool, retrying ONCE with a short backoff if the result is a
  * network-level failure (httpStatus === 0 — no HTTP response was ever
@@ -785,6 +805,14 @@ function classifyFailure(probe, res, { stillProcessingAfterPoll = false } = {}) 
     return { domain: "③-backend", severity: "P2", note: "scraper task still processing/unresolved after one poll" };
   }
 
+  if (httpStatus === 200 && UPSTREAM_THROTTLE_RE.test(msg)) {
+    return {
+      domain: "③-backend",
+      severity: "P2",
+      note: "upstream throttled (Novada API RATE_LIMITED, HTTP 200) — not ours; our own gateway limiter answers HTTP 429",
+    };
+  }
+
   if (OURS_VALIDATION_RE.test(msg)) {
     return { domain: "①-mcp-code", severity: isCore ? "P0" : "P1", note: "validation/logic error we own (bad op id / missing param)" };
   }
@@ -831,6 +859,9 @@ function adviceFor(row) {
       const label = SUBSTANCE_TABLE[row.catalogOpId]?.label ?? "usable data";
       return `Backend reported records>=1 but returned no ${label} substance (bare/schema-mismatched envelope) — flag to Novada backend (灵匠) as a data-quality incident on catalogOpId="${row.catalogOpId}", not an MCP bug.`;
     }
+    if (typeof row.note === "string" && row.note.includes("upstream throttled")) {
+      return "Novada API throttled the monitoring key (RATE_LIMITED) — not an MCP bug; if it repeats daily, ask the backend for the key's rate limits.";
+    }
     if (typeof row.note === "string" && row.note.includes("still processing")) {
       return "Backend task never completed after one poll — flag to Novada backend (灵匠) as a stuck/slow task, not an MCP bug.";
     }
@@ -874,6 +905,7 @@ async function runProbe(
     networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS,
     processingPollMaxAttempts = PROCESSING_POLL_MAX_ATTEMPTS,
     processingPollIntervalMs = PROCESSING_POLL_INTERVAL_MS,
+    throttleWaitCapMs = THROTTLE_WAIT_CAP_MS,
   } = {}
 ) {
   const base = {
@@ -915,8 +947,11 @@ async function runProbe(
 
   // Processing→poll disambiguation (scrape-family only, and only on the CLEAN
   // "still processing" outcome — never on a genuine isError failure).
-  if (probe.isScraper && res.ok && isProcessingText(res.text)) {
-    const taskId = extractTaskId(res.text);
+  // ...or the upstream-throttle shape that still carries the accepted task_id
+  // (2026-11-26): resume it exactly like a processing task, after waiting.
+  const throttledTaskId = probe.isScraper && isUpstreamThrottle(res) ? extractTaskId(errorText(res)) : null;
+  if (probe.isScraper && ((res.ok && isProcessingText(res.text)) || throttledTaskId)) {
+    const taskId = throttledTaskId ?? extractTaskId(res.text);
 
     if (!taskId) {
       // HIGH FIX (code review 2026-07-24): the "processing" wording is OUR
@@ -942,8 +977,24 @@ async function runProbe(
       };
     }
 
-    const pollArgs = { platform: probe.resumePlatform, operation: probe.catalogOpId, task_id: taskId };
+    // Carry the originating call's format/limit: without format:"json" the
+    // resumed result renders as a markdown table and the substance gate
+    // misreads it as "no parsable JSON record array" (2026-11-24/26 false ③
+    // on amazon/walmart/x — verified: same finished task, json fence only
+    // with format:"json").
+    const pollArgs = {
+      platform: probe.resumePlatform,
+      operation: probe.catalogOpId,
+      task_id: taskId,
+      ...(probe.args?.format ? { format: probe.args.format } : {}),
+      ...(probe.args?.limit ? { limit: probe.args.limit } : {}),
+    };
     assertExecutable("novada_scrape", pollArgs);
+    if (throttledTaskId) {
+      const w = throttleWaitMs(res, throttleWaitCapMs);
+      if (w > 0) await sleep(w);
+    }
+    let lastThrottled = false;
 
     // Resume up to processingPollMaxAttempts times, ~processingPollIntervalMs
     // apart (see the PROCESSING_POLL_MAX_ATTEMPTS doc comment above). Each
@@ -953,9 +1004,18 @@ async function runProbe(
     // the clock — falling through to the ASYNC bucket below — when every
     // attempt comes back still processing.
     for (let attempt = 1; attempt <= processingPollMaxAttempts; attempt += 1) {
-      if (attempt > 1 && processingPollIntervalMs > 0) await sleep(processingPollIntervalMs);
+      if (attempt > 1) {
+        const wait = lastThrottled ? Math.max(processingPollIntervalMs, throttleWaitCapMs) : processingPollIntervalMs;
+        if (wait > 0) await sleep(wait);
+      }
 
       const pollRes = await callToolWithNetworkRetry("novada_scrape", pollArgs, { timeoutMs: 90000 }, callToolFn, networkRetryBackoffMs);
+
+      if (isUpstreamThrottle(pollRes)) {
+        lastThrottled = true;
+        continue; // throttled again — wait and resume, never a ours-domain failure
+      }
+      lastThrottled = false;
 
       if (pollRes.ok) {
         const pollRecords = extractRecordsCount(pollRes.text);
@@ -1037,6 +1097,25 @@ async function runProbe(
         taskId,
         error: `task_id="${taskId}" resumed to a Failed outcome after ${attempt} poll(s) (${cls.note}): ${errorText(pollRes) || "(no error message)"}`,
         note: cls.note,
+      };
+    }
+
+    // Throttled on the last resume attempt(s): we never got to read the task.
+    // Upstream throttling of our monitoring key — ③-backend, not ours.
+    if (lastThrottled) {
+      if (delayMs > 0) await sleep(delayMs);
+      return {
+        ...base,
+        status: "FAIL",
+        domain: "③-backend",
+        severity: "P2",
+        configFault: false,
+        httpStatus: res.httpStatus,
+        timeMs: res.timeMs,
+        records: 0,
+        taskId,
+        error: `task_id="${taskId}": upstream RATE_LIMITED on every remaining resume attempt (${processingPollMaxAttempts} attempts)`,
+        note: "upstream throttled (Novada API RATE_LIMITED, HTTP 200) through all resume attempts — not ours",
       };
     }
 
@@ -1139,6 +1218,7 @@ async function runAllProbes(
     networkRetryBackoffMs = NETWORK_RETRY_BACKOFF_MS,
     processingPollMaxAttempts = PROCESSING_POLL_MAX_ATTEMPTS,
     processingPollIntervalMs = PROCESSING_POLL_INTERVAL_MS,
+    throttleWaitCapMs = THROTTLE_WAIT_CAP_MS,
   } = {}
 ) {
   const liveTools = await listToolsFn();
@@ -1167,7 +1247,7 @@ async function runAllProbes(
       });
       continue;
     }
-    const row = await runProbe(probe, { callToolFn, delayMs, networkRetryBackoffMs, processingPollMaxAttempts, processingPollIntervalMs });
+    const row = await runProbe(probe, { callToolFn, delayMs, networkRetryBackoffMs, processingPollMaxAttempts, processingPollIntervalMs, throttleWaitCapMs });
     results.push(row);
     if (delayMs > 0) await sleep(delayMs);
   }

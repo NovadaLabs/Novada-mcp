@@ -110,6 +110,28 @@ function stubCallTool(name, args) {
 
   // Generic-dispatcher poll calls: novada_scrape({ platform, operation, task_id }).
   if (name === "novada_scrape" && args && typeof args.task_id === "string") {
+    // 2026-11-26 (Layer D 11-26 false "①-mcp-code P0" on tiktok/ig/fb/linkedin):
+    // upstream RATE_LIMITED while the MCP polled the task status. The task was
+    // accepted (task_id in the message) — the probe must wait + resume, not fail.
+    if (args.task_id === "ddg-throttle-1") {
+      const n = callLog.filter((c) => c.name === "novada_scrape" && c.args?.task_id === "ddg-throttle-1").length;
+      if (n < 2) {
+        return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 300, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"ddg-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+      }
+      return Promise.resolve({
+        ok: true,
+        httpStatus: 200,
+        timeMs: 600,
+        text:
+          "## Scrape Results\nplatform: duckduckgo.com | operation: duckduckgo | records: 1 | source: live | format: json\n\n" +
+          '```json\n[{"title": "Claude — Anthropic", "link": "https://claude.com"}]\n```',
+        error: null,
+      });
+    }
+    if (args.task_id === "g-throttle-1") {
+      // Throttled on EVERY resume attempt -> upstream throttling, ③-backend, never ours.
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 300, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"g-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+    }
     if (args.task_id === "walmart-task-1") {
       // Poll completes with real records -> SLOW, not a failure. V3-N1/C-2
       // fix: PROBES now requests format:"json" for every scraper, and
@@ -198,6 +220,14 @@ function stubCallTool(name, args) {
   }
 
   switch (name) {
+    case "novada_scrape_duckduckgo":
+      // Initial call: task accepted, status poll throttled upstream (11-26 shape).
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 900, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"ddg-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+    case "novada_scrape":
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 900, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests. Resume with task_id=\"g-throttle-1\" instead of re-submitting — this does not incur a new charge.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
+    case "novada_monitor":
+      // Non-scraper tool throttled upstream, no task_id: upstream throttle, not ours.
+      return Promise.resolve({ ok: false, httpStatus: 200, timeMs: 400, text: null, error: { toolError: true, message: "Error [RATE_LIMITED]: Rate limit exceeded. API is throttling your requests.\nfailure_class: quota\nretry_recommended: true\nretry_after_ms: 30000" } });
     case "novada_setup":
       // Scenario 1: a plain pass.
       return Promise.resolve({ ok: true, httpStatus: 200, timeMs: 50, text: "novada_setup ok", error: null });
@@ -483,6 +513,7 @@ async function main() {
     // milliseconds, not tens of seconds.
     processingPollMaxAttempts: 4,
     processingPollIntervalMs: 0,
+    throttleWaitCapMs: 0,
   });
 
   console.log("");
@@ -514,6 +545,9 @@ async function main() {
     { name: "novada_scrape_google", status: "FAIL", domain: "③-backend", severity: "P2", why: 'scraper 50004 "context deadline exceeded" backend timeout on a NON-flaky platform (2026-07-28 fix: must be ③, not ①)' },
     { name: "novada_search", status: "FAIL", domain: "②-gateway", severity: "P0", why: "2026-07-30 free-gateway-cap error on a CORE tool (must be ②/P0, not ①-mcp-code)" },
     { name: "novada_scrape_yandex", status: "FAIL", domain: "②-gateway", severity: "P1", why: "the SAME free-gateway-cap error on a KNOWN-FLAKY platform, httpStatus 0 (must be ②/P1, NOT swallowed into ③-backend/P3)" },
+    { name: "novada_scrape_duckduckgo", status: "SLOW", domain: "-", severity: null, why: "2026-11-26: upstream RATE_LIMITED with task_id -> wait + resume; throttled once more, then resolves -> SLOW, never ①-mcp-code" },
+    { name: "novada_scrape", status: "FAIL", domain: "③-backend", severity: "P2", why: "2026-11-26: throttled upstream on EVERY resume attempt -> upstream throttling ③/P2, never ①-mcp-code P0" },
+    { name: "novada_monitor", status: "FAIL", domain: "③-backend", severity: "P2", why: "2026-11-26: upstream RATE_LIMITED (HTTP 200, no task_id) on a non-scraper -> ③/P2, not the 'unclassified -> ours' default" },
   ];
 
   console.log("");
@@ -528,6 +562,17 @@ async function main() {
       `${sc.name}: severity === ${JSON.stringify(sc.severity)} (got ${JSON.stringify(row.severity)}) — ${sc.why}`
     );
   }
+
+  // 2026-11-24/26: resume calls must carry the originating probe's format
+  // (format:"json"); without it the resumed result renders as a markdown
+  // table and the substance gate misreads it as "no parsable JSON record
+  // array" -> false ③ on amazon/walmart/x.
+  const pollCalls = callLog.filter((c) => c.name === "novada_scrape" && typeof c.args?.task_id === "string");
+  expect(pollCalls.length > 0, `resume calls were exercised (${pollCalls.length})`);
+  expect(
+    pollCalls.every((c) => c.args.format === "json"),
+    `every resume call carries format:"json" (missing on: ${JSON.stringify([...new Set(pollCalls.filter((c) => c.args.format !== "json").map((c) => c.args.task_id))])})`
+  );
 
   // TOW2-257 Phase 4: run the SAME post-processing main() applies
   // (applySeverityEscalations, which also computes `.advice` via adviceFor,
