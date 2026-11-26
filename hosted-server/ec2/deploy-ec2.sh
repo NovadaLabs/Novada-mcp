@@ -8,8 +8,9 @@ HOST="${1:-novada-mcp}"
 HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
 case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
 [ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
-# Settle between instances (2026-11-26): nginx's passive check (max_fails=1,
-# fail_timeout=10s) can mark a just-restarted instance down for 10 s when an SSE
+# Settle between instances (2026-11-26): nginx's passive check can mark a
+# just-restarted instance down for fail_timeout (10 s; was max_fails=1 at the
+# 2026-11-25 incident, max_fails=3 since 2026-11-26) when an SSE
 # stream on its OLD process hits proxy_read_timeout; touching the next instance
 # inside that window = "no live upstreams" (2×502 on 2026-11-25). nginx counts
 # fail_timeout in whole seconds, so "down 10 s" is effectively up to ~11 s —
