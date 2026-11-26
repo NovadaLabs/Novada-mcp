@@ -43,9 +43,13 @@ done
 
 echo "[roll-settle] default settle covers nginx fail_timeout (static)"
 CONF="$HERE/../nginx-novada-mcp.conf"
-FT="$(grep -oE 'fail_timeout=[0-9]+' "$CONF" | head -1 | cut -d= -f2)"; FT="${FT:-10}"  # nginx default 10s
+# Largest fail_timeout across ALL upstream server lines, with units (nginx
+# accepts e.g. 10, 10s, 1m, 1h); no explicit value anywhere = nginx default 10s.
+FT="$(grep -oE 'fail_timeout=[0-9]+[smh]?' "$CONF" | cut -d= -f2 | awk '
+  { v=$0; n=v+0; u=substr(v, length(v)); if (u=="m") n*=60; else if (u=="h") n*=3600; if (n>m) m=n }
+  END { print (m==""?10:m) }')"
 DEF="$(grep -oE 'NOVADA_MCP_ROLL_SETTLE_S:-[0-9]+' "$SCRIPT" | head -1 | cut -d- -f2)"
-check '[ -n "$DEF" ] && [ "$DEF" -ge $((FT + 2)) ]' "default settle (${DEF}s) >= nginx fail_timeout (${FT}s, effectively up to $((FT+1))s) + margin"
+check '[ -n "$DEF" ] && [ "$DEF" -ge $((FT + 2)) ]' "default settle (${DEF}s) >= max nginx fail_timeout (${FT}s, effectively up to $((FT+1))s) + margin"
 
 echo "[roll-settle] deploy-ec2.sh carries the same settle (static)"
 D="$HERE/../deploy-ec2.sh"
