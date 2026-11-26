@@ -25,13 +25,28 @@ HOST="${1:-novada-mcp}"
 HEALTH_PATH="${NOVADA_MCP_HEALTH_PATH:-/health/ready}"
 case "$HEALTH_PATH" in /health/ready|/health) ;; *) echo "REFUSED: NOVADA_MCP_HEALTH_PATH must be /health/ready or /health" >&2; exit 1 ;; esac
 [ "$HEALTH_PATH" = /health ] && echo "WARNING: health gate = static /health — KV is NOT checked by this roll" >&2
+# Settle between instances (2026-11-26): nginx's passive check (max_fails=1,
+# fail_timeout=10s) can mark a just-restarted instance down for 10 s when an SSE
+# stream on its OLD process hits proxy_read_timeout; touching the next instance
+# inside that window = "no live upstreams" (2×502 on 2026-11-25). nginx counts
+# fail_timeout in whole seconds, so "down 10 s" is effectively up to ~11 s —
+# keep this default >= fail_timeout + 2 (checked by test/roll-settle-selftest.sh;
+# nginx-novada-mcp.conf cross-references it). Seconds, 0-60.
+ROLL_SETTLE_S="${NOVADA_MCP_ROLL_SETTLE_S:-12}"
+case "$ROLL_SETTLE_S" in ''|*[!0-9]*) echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1 ;; esac
+[ "$ROLL_SETTLE_S" -le 60 ] || { echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1; }
 
-ssh "$HOST" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
+ssh "$HOST" NOVADA_MCP_ROLL_SETTLE_S="$ROLL_SETTLE_S" NOVADA_MCP_HEALTH_PATH="$HEALTH_PATH" bash -s <<'REMOTE'
 set -euo pipefail
 exec 9>/tmp/novada-mcp-deploy.lock
 flock -n 9 || { echo "REFUSED: a deploy or rolling restart is already in progress" >&2; exit 1; }
 
 INSTANCE_PORTS="3000 3001"
+# Re-validate remotely (defense in depth; this script also runs via test harnesses).
+ROLL_SETTLE_S="${NOVADA_MCP_ROLL_SETTLE_S:-12}"
+case "$ROLL_SETTLE_S" in ''|*[!0-9]*) echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1 ;; esac
+[ "$ROLL_SETTLE_S" -le 60 ] || { echo "REFUSED: NOVADA_MCP_ROLL_SETTLE_S must be an integer 0-60" >&2; exit 1; }
+settle() { [ "$ROLL_SETTLE_S" -gt 0 ] || return 0; echo "settling ${ROLL_SETTLE_S}s (nginx fail_timeout) before the next instance..." >&2; sleep "$ROLL_SETTLE_S"; }
 
 health() {
   local port="$1"
@@ -42,6 +57,7 @@ health() {
   return 1
 }
 
+REMAINING=$(echo $INSTANCE_PORTS | wc -w)
 for port in $INSTANCE_PORTS; do
   echo "restarting novada-mcp@${port}..." >&2
   sudo systemctl reset-failed "novada-mcp@${port}" 2>/dev/null || true
@@ -54,6 +70,8 @@ for port in $INSTANCE_PORTS; do
     exit 1
   fi
   echo "novada-mcp@${port} OK" >&2
+  REMAINING=$((REMAINING - 1))
+  [ "$REMAINING" -gt 0 ] && settle
 done
 echo "ROLLING RESTART OK: both instances healthy"
 REMOTE
