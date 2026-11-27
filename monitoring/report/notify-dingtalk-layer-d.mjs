@@ -346,7 +346,7 @@ export function buildHeartbeatMessage({ now, layerD, health }) {
     : `- Layer D 每日全量探针（本机）：近 7 天有 **${layerD.days}/7** 天跑过（共 ${layerD.runs} 份报告），其中 ${layerD.problems} 份有问题（应已单独报过）${layerD.unreadable ? `，${layerD.unreadable} 份无法读取` : ""}${layerD.days < 7 ? " ⚠️ 少于 7 天：本机定时任务有几天没跑（关机/睡眠？）" : ""}`;
   const hc = health?.error
     ? `- MCP Health 定时检查（GitHub Actions）：❓ 未能统计（${health.error}）`
-    : `- MCP Health 定时检查（GitHub Actions）：近 7 天定时运行 **${health.runs}** 次（排了 ${EXPECTED_HEALTH_RUNS_PER_WEEK} 次，GitHub 常丢约 1/3，属正常）${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.gapDays?.length ? ` ⚠️ ${health.gapDays.join("、")} 整天没有运行：定时任务可能被停用` : ""}`;
+    : `- MCP Health 定时检查（GitHub Actions）：近 7 天定时运行 **${health.runs}** 次（排了 ${EXPECTED_HEALTH_RUNS_PER_WEEK} 次${health.gapDays?.length ? "" : "，GitHub 常丢约 1/3，属正常"}）${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.gapDays?.length ? ` ⚠️ ${health.gapDays.join("、")} 整天没有运行：定时任务可能被停用` : ""}`;
   const lines = [
     `### ${title}`,
     "",

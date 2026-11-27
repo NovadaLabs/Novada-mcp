@@ -243,10 +243,12 @@ console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
   const week = ["2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28", "2026-11-29"];
   const gNone = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: spread(week, 3).concat(spread(["2026-11-30"], 1)) }), { status: 200 }) });
   expect(gNone.runs === 19 && gNone.gapDays.length === 0, `3 runs/day every day → no gap (runs ${gNone.runs}, gaps ${gNone.gapDays})`);
-  const gHole = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: spread(week.filter((d) => d !== "2026-11-26" && d !== "2026-11-27"), 5) }), { status: 200 }) });
-  expect(gHole.gapDays.join(",") === "2026-11-26,2026-11-27", `whole-day gaps reported in order (${gHole.gapDays})`);
+  const gHole = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: spread(week.filter((d) => d !== "2026-11-26" && d !== "2026-11-27"), 5).concat([{ created_at: "2026-11-26T10:00:00Z", event: "workflow_dispatch", status: "completed", conclusion: "success" }]) }), { status: 200 }) });
+  expect(gHole.gapDays.join(",") === "2026-11-26,2026-11-27", `whole-day gaps reported in order; a manual run does not fill a gap (${gHole.gapDays})`);
   const gZero = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: [] }), { status: 200 }) });
   expect(gZero.runs === 0 && gZero.gapDays.length === 6, "schedule fully stopped → all 6 days flagged");
+  const zeroMsg = buildHeartbeatMessage({ now: NOW, layerD: { runs: 7, days: 7, problems: 0, unreadable: 0 }, health: gZero }).text;
+  expect(!zeroMsg.includes("属正常") && zeroMsg.includes("可能被停用"), "a gap week never calls the count normal");
   expect(bad.includes("应已单独报过"), "heartbeat does not claim problem messages were delivered");
 
   // Pin EXPECTED_HEALTH_RUNS_PER_WEEK to the workflow's crons (runs/day = number of hours in each cron).
