@@ -7,7 +7,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildLayerDMessage, main, MAX_FAILURE_LINES, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
+import { buildLayerDMessage, layerDProblem, main, MAX_FAILURE_LINES, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
 
 let failures = 0;
 function expect(cond, msg) {
@@ -129,6 +129,39 @@ console.log("[selftest] main — DingTalk rejects");
   const fetchFn = async () => new Response(JSON.stringify({ errcode: 310000, errmsg: "keywords not in content" }), { status: 200 });
   const code = await main([reportPath], { DINGTALK_WEBHOOK_URL: "https://oapi.dingtalk.com/robot/send?access_token=TEST" }, { fetchFn, sleep: async () => {} });
   expect(code === 1, "errcode != 0 → exit 1 (caller logs it, never fatal to the daily job)");
+}
+
+console.log("[selftest] layerDProblem — send only on problems (owner 2026-11-27)");
+{
+  const GREEN = { finishedAt: "2026-11-28T02:59:00.000Z", exitCode: 0, results: [row("novada_setup", "PASS"), row("novada_research", "SLOW"), row("novada_scrape_github", "ASYNC")], summary: { testKeyDegradedCount: 0 } };
+  expect(layerDProblem(GREEN) === null, "PASS/SLOW/ASYNC only, exitCode 0, key not degraded → no problem");
+  expect(layerDProblem({ ...GREEN, exitCode: undefined }) === null, "missing exitCode alone is not a problem");
+  // Problem matrix — one row per class; each must be detected on an otherwise-green report.
+  const cases = [
+    ["no-results", { ...GREEN, results: [] }],
+    ["no-results", { ...GREEN, results: undefined }],
+    ["fail", { ...GREEN, results: [...GREEN.results, row("novada_scrape_bing", "FAIL", "③-backend", "P1", "x")] }],
+    ["missing", { ...GREEN, results: [...GREEN.results, row("novada_scrape_shein", "MISSING")] }],
+    ["unknown-status", { ...GREEN, results: [...GREEN.results, row("novada_x", "TIMEOUT")] }],
+    ["unknown-status", { ...GREEN, results: [...GREEN.results, { name: "novada_y" }] }],
+    ["test-key-degraded", { ...GREEN, summary: { testKeyDegradedCount: 2 } }],
+    ["nonzero-exit", { ...GREEN, exitCode: 1 }],
+  ];
+  for (const [want, rep] of cases) expect(layerDProblem(rep) === want, `problem class '${want}' detected`);
+  expect(layerDProblem(null) === "no-results" && layerDProblem({}) === "no-results", "null / empty object → problem (fail closed)");
+
+  const greenPath = path.join(dir, "green.json");
+  writeFileSync(greenPath, JSON.stringify(GREEN));
+  const env = { DINGTALK_WEBHOOK_URL: "https://oapi.dingtalk.com/robot/send?access_token=TEST" };
+  let called = 0;
+  const okFetch = async () => { called += 1; return new Response(JSON.stringify({ errcode: 0, errmsg: "ok" }), { status: 200 }); };
+  expect((await main([greenPath], env, { fetchFn: okFetch, sleep: async () => {} })) === 0 && called === 0, "configured + all healthy → exit 0, NO network call");
+  expect((await main([greenPath], { ...env, DRY_RUN: "1" }, { fetchFn: okFetch })) === 0 && called === 0, "dry-run + all healthy → nothing printed as a send either");
+  const fatalPath = path.join(dir, "fatal.json");
+  writeFileSync(fatalPath, JSON.stringify({ finishedAt: "2026-11-27T01:57:45.366Z", results: [], exitCode: 1 }));
+  expect((await main([fatalPath], env, { fetchFn: okFetch, sleep: async () => {} })) === 0 && called === 1, "probe could not run → still sent");
+  called = 0;
+  expect((await main([reportPath], env, { fetchFn: okFetch, sleep: async () => {} })) === 0 && called === 1, "mixed report with failures → sent");
 }
 
 console.log("[selftest] main — bad input");

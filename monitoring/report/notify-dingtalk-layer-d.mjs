@@ -7,6 +7,9 @@
  * monitoring/smoke/full-tools-probe.mjs). Called by run-daily-report.sh after
  * the daily local run; dependency-free Node >=20.
  *
+ * Sends ONLY when the run found a problem (owner 2026-11-27: "没问题就不用发了");
+ * an all-healthy run is logged locally and sends nothing — see layerDProblem().
+ *
  * Why (2026-11-25): the DingTalk daily report (monitoring/dingtalk, GitHub
  * Actions 01:07Z) checks 6 of the 29 hosted tools and only for "no error",
  * so it showed 1 failure while Layer D found ~10 tools failing every day
@@ -21,7 +24,7 @@
  *   DINGTALK_KEYWORD      optional — keyword-security robots (auto-ensured)
  *   DRY_RUN=1             print the message instead of sending
  *
- * Exit: 0 sent / skipped / dry-run · 1 DingTalk or network rejected the send ·
+ * Exit: 0 sent / skipped (healthy run or no webhook) / dry-run · 1 DingTalk or network rejected the send ·
  * 2 bad input (no path, missing or unparseable report).
  */
 import { readFileSync } from "node:fs";
@@ -58,6 +61,25 @@ function shortError(err, knownSecrets = []) {
 /** fetch with a hard timeout (review D3: an unbounded fetch could stall the daily job). */
 export function withTimeout(fetchImpl, ms = SEND_TIMEOUT_MS) {
   return (url, init = {}) => fetchImpl(url, { ...init, signal: AbortSignal.timeout(ms) });
+}
+
+/**
+ * Why this run is worth a DingTalk message, or null when everything was healthy.
+ * Fail-closed: anything other than a non-empty, all-healthy run counts as a
+ * problem — zero rows (probe could not run), FAIL, MISSING, a degraded test key
+ * (results untrustworthy), a non-zero probe exitCode, or a status we don't know.
+ * @returns {string | null}
+ */
+export function layerDProblem(report) {
+  const results = Array.isArray(report?.results) ? report.results : [];
+  if (results.length === 0) return "no-results";
+  const OK = new Set(["PASS", "SLOW", "ASYNC"]);
+  if (results.some((r) => r?.status === "FAIL")) return "fail";
+  if (results.some((r) => r?.status === "MISSING")) return "missing";
+  if (results.some((r) => !OK.has(r?.status))) return "unknown-status";
+  if (Number(report?.summary?.testKeyDegradedCount) > 0) return "test-key-degraded";
+  if (report?.exitCode != null && Number(report.exitCode) !== 0) return "nonzero-exit";
+  return null;
 }
 
 /**
@@ -147,6 +169,12 @@ export async function main(argv, env, deps = {}) {
   } catch (err) {
     console.error(`[notify-layer-d] cannot read report ${reportPath}: ${err?.message || err}`);
     return 2;
+  }
+
+  const problem = layerDProblem(report);
+  if (problem === null) {
+    console.log(`[notify-layer-d] skip: all ${report.results.length} tools healthy — nothing sent (send only on problems)`);
+    return 0;
   }
 
   const knownSecrets = SECRET_ENV_VARS.map((k) => env[k]).filter(Boolean);
