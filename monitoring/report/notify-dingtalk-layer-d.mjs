@@ -20,6 +20,9 @@
  *   node monitoring/report/notify-dingtalk-layer-d.mjs --fatal "<reason>"
  *     (the caller could not get a fresh report at all — always sends
  *      "probe could not run" with the reason; review 2026-11-27 HIGH)
+ *   node monitoring/report/notify-dingtalk-layer-d.mjs --heartbeat <reportsDir>
+ *     (weekly "monitoring is alive" message — owner 2026-11-28: one per week,
+ *      since problems-only means silence is otherwise ambiguous; always sent)
  *
  * Env (same names as monitoring/dingtalk/run.mjs):
  *   DINGTALK_WEBHOOK_URL  required to send; UNSET → skip cleanly (exit 0)
@@ -32,7 +35,8 @@
  * message is still attempted for a missing/unparseable report; if that send
  * fails the exit is 1). The caller only logs this code.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { sendDingTalk } from "../dingtalk/send.mjs";
 
 export const MAX_FAILURE_LINES = 15;
@@ -182,6 +186,8 @@ export async function main(argv, env, deps = {}) {
     console.error("[notify-layer-d] usage: notify-dingtalk-layer-d.mjs <report.json>");
     return 2;
   }
+  if (reportPath === "--heartbeat") return heartbeatMain(argv[1], env, deps);
+
   let report;
   let inputError = false;
   if (reportPath === "--fatal") {
@@ -232,6 +238,146 @@ export async function main(argv, env, deps = {}) {
 /** Synthetic "could not run" report for when there is no usable probe report. */
 function fatalReport(reason) {
   return { finishedAt: new Date().toISOString(), results: [], exitCode: null, summary: { fatalError: String(reason) } };
+}
+
+// ── Weekly heartbeat ──────────────────────────────────────────────────────────
+export const HEARTBEAT_WINDOW_MS = 7 * 24 * 3600 * 1000;
+const HEALTH_WORKFLOW = "mcp-health-dingtalk.yml";
+// Scheduled MCP Health runs per week: crons "37 0,6,12,18 * * *" (4/day) +
+// "7 1 * * *" (1/day) in .github/workflows/mcp-health-dingtalk.yml — pinned by
+// the selftest against the workflow file.
+export const EXPECTED_HEALTH_RUNS_PER_WEEK = 35;
+
+/** Local calendar date (the job runs at a local time) as YYYY-MM-DD. */
+export function localDate(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Today and the 6 local dates before it (DST-safe: steps by calendar day at local noon). */
+export function expectedLocalDates(now) {
+  const base = new Date(now);
+  base.setHours(12, 0, 0, 0);
+  const out = [];
+  for (let k = 0; k < 7; k += 1) {
+    const d = new Date(base);
+    d.setDate(base.getDate() - k);
+    out.push(localDate(d.getTime()));
+  }
+  return out;
+}
+
+/** full-2026-11-27T01-57-45-366Z.json → ms epoch, or null. */
+export function reportTimeFromName(name) {
+  const m = /^full-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/.exec(name);
+  if (!m) return null;
+  const t = Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`);
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * Layer D runs on the 7 expected local dates (today + 6 before), from the
+ * report files on disk. Counting calendar dates — not a rolling 168 h window,
+ * which could include last Monday's report and show 7/7 with a day missing
+ * (review round 3 HIGH) — means `days` can never exceed 7.
+ */
+export function collectLayerDWeek(reportsDir, now) {
+  let names;
+  try {
+    names = readdirSync(reportsDir);
+  } catch (err) {
+    return { error: `reports dir unreadable: ${err?.code || err?.message || err}` };
+  }
+  // `days` = expected dates with ≥1 run (manual extra runs don't inflate it).
+  const expected = new Set(expectedLocalDates(now));
+  let runs = 0, problems = 0, unreadable = 0;
+  const days = new Set();
+  for (const name of names) {
+    const t = reportTimeFromName(name);
+    if (t === null || t > now) continue;
+    const day = localDate(t);
+    if (!expected.has(day)) continue;
+    runs += 1;
+    days.add(day);
+    try {
+      if (layerDProblem(JSON.parse(readFileSync(path.join(reportsDir, name), "utf8"))) !== null) problems += 1;
+    } catch {
+      unreadable += 1;
+    }
+  }
+  return { runs, days: days.size, problems, unreadable };
+}
+
+/** MCP Health (GitHub Actions) runs in the last 7 days — public repo, unauthenticated API. */
+export async function collectHealthWeek({ repo, now, fetchFn }) {
+  const since = new Date(now - HEARTBEAT_WINDOW_MS).toISOString().slice(0, 10);
+  const url = `https://api.github.com/repos/${repo}/actions/workflows/${HEALTH_WORKFLOW}/runs?created=%3E%3D${since}&per_page=100`;
+  try {
+    const res = await fetchFn(url, { headers: { accept: "application/vnd.github+json", "user-agent": "novada-mcp-monitor" } });
+    if (!res.ok) return { error: `GitHub API HTTP ${res.status}` };
+    const body = await res.json();
+    const all = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
+    const runs = all.filter((r) => Date.parse(r.created_at) >= now - HEARTBEAT_WINDOW_MS);
+    // Only scheduled runs prove the schedule is alive (a manual test run must not mask a disabled cron).
+    const scheduled = runs.filter((r) => r.event === "schedule");
+    const jobErrors = scheduled.filter((r) => r.status === "completed" && r.conclusion !== "success").length;
+    // GitHub's scheduler drops ~1/3 of runs (healthy weeks measured 21–23 of 35),
+    // so a count threshold cries wolf (review round 4 HIGH). Instead: each of the
+    // 6 full UTC days before today should have ≥1 scheduled run (5 are scheduled
+    // per day); a day with 0 is a real gap.
+    const seen = new Set(scheduled.map((r) => String(r.created_at).slice(0, 10)));
+    const gapDays = [];
+    for (let k = 1; k <= 6; k += 1) {
+      const day = new Date(now - k * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      if (!seen.has(day)) gapDays.push(day);
+    }
+    return { runs: scheduled.length, jobErrors, gapDays: gapDays.reverse() };
+  } catch (err) {
+    return { error: `GitHub API: ${err?.name === "TimeoutError" ? "timeout" : err?.message || err}` };
+  }
+}
+
+/** Pure: the heartbeat text. A source that could not be read is said so, never shown as 0. */
+export function buildHeartbeatMessage({ now, layerD, health }) {
+  const date = localDate(now);
+  const title = `💓 Novada MCP 监控周心跳 — ${date}`;
+  const ld = layerD?.error
+    ? `- Layer D 每日全量探针（本机）：❓ 未能统计（${layerD.error}）`
+    : `- Layer D 每日全量探针（本机）：近 7 天有 **${layerD.days}/7** 天跑过（共 ${layerD.runs} 份报告），其中 ${layerD.problems} 份有问题（应已单独报过）${layerD.unreadable ? `，${layerD.unreadable} 份无法读取` : ""}${layerD.days < 7 ? " ⚠️ 少于 7 天：本机定时任务有几天没跑（关机/睡眠？）" : ""}`;
+  const hc = health?.error
+    ? `- MCP Health 定时检查（GitHub Actions）：❓ 未能统计（${health.error}）`
+    : `- MCP Health 定时检查（GitHub Actions）：近 7 天定时运行 **${health.runs}** 次（排了 ${EXPECTED_HEALTH_RUNS_PER_WEEK} 次${health.gapDays?.length ? "" : "，GitHub 常丢约 1/3，属正常"}）${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.gapDays?.length ? ` ⚠️ ${health.gapDays.join("、")} 整天没有运行：定时任务可能被停用` : ""}`;
+  const lines = [
+    `### ${title}`,
+    "",
+    "监控仍在运行。平时只在出问题时发消息，这条每周一发一次，用来确认监控本身没停。",
+    "",
+    ld,
+    hc,
+    "",
+    "_如果哪周一没收到这条，说明本机每日任务没跑（关机/睡眠/配置丢失），请检查。_",
+  ];
+  return { title, text: lines.join("\n") };
+}
+
+async function heartbeatMain(reportsDir, env, deps) {
+  const now = deps.now ?? Date.now();
+  const fetchFn = withTimeout(deps.fetchFn ?? fetch);
+  const layerD = reportsDir ? collectLayerDWeek(reportsDir, now) : { error: "no reports dir given" };
+  const health = await collectHealthWeek({ repo: env.MONITOR_GH_REPO || "NovadaLabs/novada-mcp", now, fetchFn });
+  const { title, text } = buildHeartbeatMessage({ now, layerD, health });
+  const dryRun = env.DRY_RUN === "1";
+  if (!env.DINGTALK_WEBHOOK_URL && !dryRun) {
+    console.log("[notify-layer-d heartbeat] skip: DINGTALK_WEBHOOK_URL not set");
+    return 0;
+  }
+  const res = await sendDingTalk({ webhookUrl: env.DINGTALK_WEBHOOK_URL, secret: env.DINGTALK_SECRET, keyword: env.DINGTALK_KEYWORD, title, text, dryRun, fetchFn, ...(deps.sleep ? { sleep: deps.sleep } : {}) });
+  if (!res.ok) {
+    console.error(`[notify-layer-d heartbeat] send failed: ${JSON.stringify({ errcode: res.errcode, errmsg: res.errmsg, httpStatus: res.httpStatus, error: res.error })}`);
+    return 1;
+  }
+  console.log(`[notify-layer-d heartbeat] ${res.dryRun ? "dry-run printed" : "sent"}: ${title}`);
+  return 0;
 }
 
 const isMain = (() => {

@@ -110,6 +110,18 @@ node monitoring/report/notify-dingtalk-layer-d.mjs "${NEWEST_JSON}"
 NOTIFY_EXIT=$?
 set -e
 echo "[run-daily-report] dingtalk notify exit code: ${NOTIFY_EXIT} (informational only — not fatal to this job)"
+
+# ── Weekly heartbeat (owner 2026-11-28): every Monday one "monitoring is alive"
+# message — the only message on a quiet week, so its absence on a Monday means
+# this job did not run. HEARTBEAT_FORCE=1 sends it on any day (testing).
+# Never fatal. (A Monday run that exits early on a FATAL path already sent a
+# "could not run" message instead.)
+if [ "$(date +%u)" = "1" ] || [ "${HEARTBEAT_FORCE:-}" = "1" ]; then
+  set +e
+  node monitoring/report/notify-dingtalk-layer-d.mjs --heartbeat monitoring/reports
+  echo "[run-daily-report] heartbeat exit code: $? (informational only)"
+  set -e
+fi
 if [ "${XLSX_EXIT}" -ne 0 ]; then
   echo "[run-daily-report] FATAL: Excel append failed (exit ${XLSX_EXIT}); the DingTalk summary was still attempted above." >&2
   exit "${XLSX_EXIT}"
