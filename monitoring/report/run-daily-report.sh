@@ -39,8 +39,16 @@ set -a
 . "${ENV_FILE}"
 set +a
 
+# A run that produced no usable report must still reach DingTalk as "could not
+# run" — the summary is sent only on problems, so a silent FATAL exit would look
+# exactly like a healthy day (review 2026-11-27 HIGH). Best effort, never fatal.
+notify_fatal() {
+  node monitoring/report/notify-dingtalk-layer-d.mjs --fatal "$1" || true
+}
+
 if [ -z "${NOVADA_TEST_KEY:-}" ]; then
   echo "[run-daily-report] FATAL: NOVADA_TEST_KEY is empty after sourcing ${ENV_FILE}." >&2
+  notify_fatal "run-daily-report: NOVADA_TEST_KEY is empty in ~/.novada/monitor.env"
   exit 1
 fi
 
@@ -58,6 +66,7 @@ echo "[run-daily-report] probe exit code: ${PROBE_EXIT} (informational only — 
 NEWEST_JSON="$(ls -t monitoring/reports/full-*.json 2>/dev/null | head -1 || true)"
 if [ -z "${NEWEST_JSON}" ]; then
   echo "[run-daily-report] FATAL: no monitoring/reports/full-*.json found — the probe did not run at all." >&2
+  notify_fatal "run-daily-report: probe wrote no report (probe exit ${PROBE_EXIT})"
   exit 1
 fi
 echo "[run-daily-report] using report: ${NEWEST_JSON}"
@@ -71,6 +80,7 @@ echo "[run-daily-report] using report: ${NEWEST_JSON}"
 NEWEST_MTIME="$(stat -f %m "${NEWEST_JSON}" 2>/dev/null || stat -c %Y "${NEWEST_JSON}" 2>/dev/null || echo 0)"
 if [ "${NEWEST_MTIME}" -lt "${RUN_START_EPOCH}" ]; then
   echo "[run-daily-report] FATAL: newest report ${NEWEST_JSON} (mtime ${NEWEST_MTIME}) predates this run's start (${RUN_START_EPOCH}) — the probe did not produce a fresh report this run; refusing to append stale data as today." >&2
+  notify_fatal "run-daily-report: probe produced no fresh report this run (probe exit ${PROBE_EXIT})"
   exit 1
 fi
 
@@ -91,7 +101,8 @@ set -e
 
 # ── Optional: one DingTalk summary of this run (2026-11-25) ─────────────────
 # The DingTalk daily report (GitHub Actions, monitoring/dingtalk) only covers 6
-# tools; this posts the full Layer D picture. Needs DINGTALK_WEBHOOK_URL (and
+# tools; this posts the full Layer D picture — ONLY when the run found a
+# problem (owner 2026-11-27); an all-healthy run logs a skip and sends nothing. Needs DINGTALK_WEBHOOK_URL (and
 # DINGTALK_SECRET / DINGTALK_KEYWORD) in ${ENV_FILE}, already sourced above —
 # skipped cleanly when unset. Never fatal: the Excel sheet is the primary record.
 set +e

@@ -201,8 +201,16 @@ export function renderDailyReport({ results, dateStamp, now = new Date() }) {
 
   // Account-level test-key problems (balance/validity) never count toward
   // "整体状态" — see classifyFailure()'s header comment.
+  // Since 2026-11-27 this report is only sent when something failed, so the
+  // headline must never read "all healthy" on a sent message.
   const overall =
-    productFailing.length === 0 ? "✅ all healthy" : `⚠️ ${productFailing.length} check(s) failing (worst: ${worstSeverity(productFailing)})`;
+    results.length === 0
+      ? "❌ 检查未能运行（0 项结果）"
+      : productFailing.length > 0
+        ? `⚠️ ${productFailing.length} check(s) failing (worst: ${worstSeverity(productFailing)})`
+        : accountFailing.length > 0
+          ? `⚠️ 监控账号问题（产品正常）: ${accountFailing.length} 项`
+          : "✅ all healthy";
 
   const tableHeader = "| check | status | latency | note |\n| --- | --- | --- | --- |";
   const tableRows = results.map((r) => {
@@ -330,11 +338,19 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
   if (actions.length > 0) {
     console.log(`[dingtalk/run alert] ${actions.length} action(s): ${actions.map((a) => `${a.type}:${a.id}`).join(", ")}`);
   }
+  for (const a of actions.filter((x) => x.type === "recovery")) {
+    console.log(`[dingtalk/run alert] recovered (not sent): ${a.id} after ${fmtMs(a.outageMs)}`);
+  }
   if (misconfiguredToNotify.length > 0) {
     console.log(`[dingtalk/run alert] ${misconfiguredToNotify.length} misconfigured notice(s): ${misconfiguredToNotify.map((r) => r.id).join(", ")}`);
   }
 
   return sendFailure ? 1 : 0;
+}
+
+/** Daily report is sent only on a problem; zero results counts as one (fail closed). */
+export function dailyShouldSend(results) {
+  return !Array.isArray(results) || results.length === 0 || results.some((r) => !r?.ok);
 }
 
 /**
@@ -349,7 +365,7 @@ export async function runDailyMode({ ctx, dryRun, webhookUrl, secret, keyword, i
   const { send = sendDingTalk, rateLimiter = createRateLimiter() } = io;
 
   const results = await runChecks(ctx, ["free", "billable"]);
-  if (results.length > 0 && results.every((r) => r.ok)) {
+  if (!dailyShouldSend(results)) {
     for (const r of results) {
       console.log(`[dingtalk/run daily] OK  ${r.id} (${r.latencyMs}ms) ${r.note}`);
     }

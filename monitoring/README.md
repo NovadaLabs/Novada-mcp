@@ -105,7 +105,9 @@ or its contents; it is outside this repo.)
 
 `monitoring/report/run-daily-report.sh` (the local daily job) ends by calling
 `monitoring/report/notify-dingtalk-layer-d.mjs <report.json>`, which posts one
-summary — healthy/total, failures split 我方 / 网关·配置 / 上游, missing tools,
+summary **only when the run found a problem** (a failing/missing tool, an unknown
+status, a degraded test key, a non-zero probe exit, or a run that tested nothing —
+including no fresh report at all, via `--fatal`; owner 2026-11-27) — healthy/total, failures split 我方 / 网关·配置 / 上游, missing tools,
 and up to 15 failure lines — to the same DingTalk robot as the alerting layer.
 It is **off until configured**: add `DINGTALK_WEBHOOK_URL` (plus
 `DINGTALK_SECRET` / `DINGTALK_KEYWORD` if the robot uses 加签 / keywords) to

@@ -156,12 +156,45 @@ console.log("[selftest] layerDProblem — send only on problems (owner 2026-11-2
   let called = 0;
   const okFetch = async () => { called += 1; return new Response(JSON.stringify({ errcode: 0, errmsg: "ok" }), { status: 200 }); };
   expect((await main([greenPath], env, { fetchFn: okFetch, sleep: async () => {} })) === 0 && called === 0, "configured + all healthy → exit 0, NO network call");
-  expect((await main([greenPath], { ...env, DRY_RUN: "1" }, { fetchFn: okFetch })) === 0 && called === 0, "dry-run + all healthy → nothing printed as a send either");
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...a) => { logs.push(a.join(" ")); };
+  let dryCode;
+  try { dryCode = await main([greenPath], { ...env, DRY_RUN: "1" }, { fetchFn: okFetch }); } finally { console.log = origLog; }
+  expect(dryCode === 0 && logs.some((l) => l.includes("skip: all")) && !logs.some((l) => l.includes("dry-run printed")), "dry-run + all healthy → skipped by the gate, not printed as a send");
   const fatalPath = path.join(dir, "fatal.json");
   writeFileSync(fatalPath, JSON.stringify({ finishedAt: "2026-11-27T01:57:45.366Z", results: [], exitCode: 1 }));
   expect((await main([fatalPath], env, { fetchFn: okFetch, sleep: async () => {} })) === 0 && called === 1, "probe could not run → still sent");
   called = 0;
   expect((await main([reportPath], env, { fetchFn: okFetch, sleep: async () => {} })) === 0 && called === 1, "mixed report with failures → sent");
+}
+
+console.log("[selftest] could-not-run paths always reach the group (review 2026-11-27 HIGH)");
+{
+  const env = { DINGTALK_WEBHOOK_URL: "https://oapi.dingtalk.com/robot/send?access_token=TEST" };
+  const bodies = [];
+  const fetchFn = async (_u, init) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ errcode: 0, errmsg: "ok" }), { status: 200 }); };
+  expect((await main(["--fatal", "run-daily-report: probe wrote no report (probe exit 137)"], env, { fetchFn, sleep: async () => {} })) === 0 && bodies.length === 1, "--fatal <reason> → sent, exit 0");
+  const t1 = bodies[0]?.markdown?.text || "";
+  expect(t1.includes("未能运行") && t1.includes("probe exit 137"), "--fatal message says could-not-run and carries the reason");
+  bodies.length = 0;
+  const trunc = path.join(dir, "truncated.json");
+  writeFileSync(trunc, '{"results": [');
+  expect((await main([trunc], env, { fetchFn, sleep: async () => {} })) === 2 && bodies.length === 1, "unparseable report → could-not-run still sent, exit stays 2");
+  expect((bodies[0]?.markdown?.text || "").includes("report unreadable"), "unreadable-report reason is in the message");
+  bodies.length = 0;
+  expect((await main([path.join(dir, "gone.json")], env, { fetchFn, sleep: async () => {} })) === 2 && bodies.length === 1, "missing report file → could-not-run still sent, exit stays 2");
+}
+
+console.log("[selftest] message names why it was sent");
+{
+  const fatalErr = { finishedAt: "2026-11-28T02:00:00.000Z", results: [], exitCode: 1, summary: { fatalError: "TypeError: cannot read properties of undefined (reading 'tools')" } };
+  const t = buildLayerDMessage(fatalErr).text;
+  expect(t.includes("原因：TypeError"), "probe's own fatalError is shown as the reason");
+  const unk = { finishedAt: "2026-11-28T02:00:00.000Z", exitCode: 0, results: [row("novada_a", "PASS"), row("novada_b", "TIMEOUT")], summary: {} };
+  expect(buildLayerDMessage(unk).text.includes("novada_b=TIMEOUT"), "unknown-status rows are named");
+  const nz = { finishedAt: "2026-11-28T02:00:00.000Z", exitCode: 3, results: [row("novada_a", "PASS")], summary: {} };
+  expect(buildLayerDMessage(nz).text.includes("探针退出码: 3"), "non-zero probe exit is stated");
 }
 
 console.log("[selftest] main — bad input");

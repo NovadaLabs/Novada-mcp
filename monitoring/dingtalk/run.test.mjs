@@ -18,6 +18,7 @@ import {
   shanghaiDateStamp,
   runAlertMode,
   runDailyMode,
+  dailyShouldSend,
   readExpectedToolCount,
   classifyFailure,
   composeAlertMessage,
@@ -67,6 +68,19 @@ test("renderDailyReport: renders a table row for EVERY check result, in order", 
   assert.ok(text.includes("version 0.9.42") === false); // version line uses a labeled field, not the raw note
   assert.match(text, /\*\*version\*\*: 0\.9\.42/);
   assert.match(text, /\*\*tool count\*\*: 28/);
+});
+
+test("dailyShouldSend: zero results or any failure -> send; all ok -> silent", () => {
+  assert.equal(dailyShouldSend([]), true, "zero results is a problem (fail closed)");
+  assert.equal(dailyShouldSend(undefined), true);
+  assert.equal(dailyShouldSend([row("initialize", true), row("tools_list", true)]), false);
+  assert.equal(dailyShouldSend([row("initialize", true), row("tools_list", false)]), true);
+});
+
+test("renderDailyReport: zero results never reads as healthy", () => {
+  const { text } = renderDailyReport({ results: [], dateStamp: "2026-11-28" });
+  assert.doesNotMatch(text, /all healthy/);
+  assert.match(text, /未能运行/);
 });
 
 test("renderDailyReport: overall status is all-healthy when every row passes", () => {
@@ -180,7 +194,11 @@ test("renderDailyReport: an INSUFFICIENT_BALANCE failure does NOT count toward �
     row("novada_search", false, { severity: "P1", note: "novada_search: [INSUFFICIENT_BALANCE] balance too low", errorCode: "INSUFFICIENT_BALANCE", errorClass: "tool" }),
   ];
   const { text } = renderDailyReport({ results, dateStamp: "2026-10-23" });
-  assert.match(text, /all healthy/, "整体状态 must stay healthy — a test-account funding problem is not a product outage");
+  // 整体状态 says the PRODUCT is fine (not a product outage) — but since 2026-11-27
+  // this report is only sent on a problem, so it must not read "all healthy".
+  assert.doesNotMatch(text, /check\(s\) failing/, "a test-account funding problem is not a product outage");
+  assert.doesNotMatch(text, /all healthy/);
+  assert.match(text, /产品正常/);
   assert.match(text, /监控账号问题/);
   assert.match(text, /测试账号余额不足/);
 });
