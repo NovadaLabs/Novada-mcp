@@ -7,7 +7,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildLayerDMessage, layerDProblem, main, MAX_FAILURE_LINES, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
+import { buildHeartbeatMessage, buildLayerDMessage, collectHealthWeek, collectLayerDWeek, layerDProblem, main, MAX_FAILURE_LINES, reportTimeFromName, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
 
 let failures = 0;
 function expect(cond, msg) {
@@ -196,6 +196,59 @@ console.log("[selftest] message names why it was sent");
   expect(buildLayerDMessage(unk).text.includes("novada_b=TIMEOUT"), "unknown-status rows are named");
   const nz = { finishedAt: "2026-11-28T02:00:00.000Z", exitCode: 3, results: [row("novada_a", "PASS")], summary: {} };
   expect(buildLayerDMessage(nz).text.includes("探针退出码: 3"), "non-zero probe exit is stated");
+}
+
+console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
+{
+  expect(reportTimeFromName("full-2026-11-27T01-57-45-366Z.json") === Date.parse("2026-11-27T01:57:45.366Z"), "report timestamp parsed from file name");
+  expect(reportTimeFromName("full-latest.json") === null && reportTimeFromName("x.json") === null, "non-report names ignored");
+
+  const NOW = Date.parse("2026-11-30T02:59:00.000Z"); // a Monday
+  const hb = mkdtempSync(path.join(tmpdir(), "layerd-hb-"));
+  const green = JSON.stringify({ exitCode: 0, results: [row("novada_setup", "PASS")], summary: {} });
+  const red = JSON.stringify({ exitCode: 1, results: [row("novada_setup", "FAIL", "③-backend", "P1", "x")], summary: {} });
+  writeFileSync(path.join(hb, "full-2026-11-30T01-57-00-000Z.json"), green);
+  writeFileSync(path.join(hb, "full-2026-11-29T01-57-00-000Z.json"), red);
+  writeFileSync(path.join(hb, "full-2026-11-29T09-00-00-000Z.json"), green); // manual extra run, same day
+  writeFileSync(path.join(hb, "full-2026-11-27T01-57-00-000Z.json"), "{trunc");
+  writeFileSync(path.join(hb, "full-2026-11-23T01-57-00-000Z.json"), red); // previous Monday: > 7 days, excluded
+  writeFileSync(path.join(hb, "notes.txt"), "x");
+  const ld = collectLayerDWeek(hb, NOW);
+  expect(ld.runs === 4 && ld.days === 3, `window = last 7 days, distinct days counted (runs ${ld.runs}, days ${ld.days})`);
+  expect(ld.problems === 1 && ld.unreadable === 1, `problem and unreadable reports counted (problems ${ld.problems}, unreadable ${ld.unreadable})`);
+  expect(typeof collectLayerDWeek(path.join(hb, "nope"), NOW).error === "string", "missing reports dir → error, not zeros");
+
+  const runsBody = { workflow_runs: [
+    { created_at: "2026-11-29T06:37:00Z", status: "completed", conclusion: "success" },
+    { created_at: "2026-11-28T06:37:00Z", status: "completed", conclusion: "failure" },
+    { created_at: "2026-11-22T06:37:00Z", status: "completed", conclusion: "success" }, // outside window
+  ] };
+  let apiUrl = "";
+  const h1 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async (u) => { apiUrl = u; return new Response(JSON.stringify(runsBody), { status: 200 }); } });
+  expect(h1.runs === 2 && h1.jobErrors === 1, `GitHub runs counted within the window (runs ${h1.runs}, jobErrors ${h1.jobErrors})`);
+  expect(apiUrl.includes("/repos/o/r/actions/workflows/mcp-health-dingtalk.yml/runs") && apiUrl.includes("created=%3E%3D2026-11-23"), "queries the MCP Health workflow since 7 days ago");
+  const h2 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response("{}", { status: 403 }) });
+  const h3 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => { throw new Error("ENOTFOUND"); } });
+  expect(/403/.test(h2.error || "") && /ENOTFOUND/.test(h3.error || ""), "API HTTP error / network error → error, not zeros");
+
+  const ok = buildHeartbeatMessage({ now: NOW, layerD: { runs: 7, days: 7, problems: 0, unreadable: 0 }, health: { runs: 28, jobErrors: 0 } }).text;
+  expect(ok.includes("7/7") && ok.includes("28") && !ok.includes("⚠️"), "healthy week: counts shown, no warning");
+  const bad = buildHeartbeatMessage({ now: NOW, layerD: { runs: 3, days: 3, problems: 1, unreadable: 0 }, health: { runs: 0, jobErrors: 0 } }).text;
+  expect(bad.includes("3/7") && bad.includes("少于 7 天") && bad.includes("可能被停用"), "missed days and 0 GitHub runs are flagged");
+  const unk = buildHeartbeatMessage({ now: NOW, layerD: { error: "reports dir unreadable: ENOENT" }, health: { error: "GitHub API HTTP 403" } }).text;
+  expect(unk.match(/未能统计/g)?.length === 2 && !/\*\*0/.test(unk), "an unreadable source says 未能统计, never renders as 0");
+
+  const env = { DINGTALK_WEBHOOK_URL: "https://oapi.dingtalk.com/robot/send?access_token=TEST" };
+  const posts = [];
+  const fetchFn = async (u, init) => {
+    if (String(u).startsWith("https://api.github.com/")) return new Response(JSON.stringify(runsBody), { status: 200 });
+    posts.push(JSON.parse(init.body));
+    return new Response(JSON.stringify({ errcode: 0, errmsg: "ok" }), { status: 200 });
+  };
+  expect((await main(["--heartbeat", hb], env, { fetchFn, sleep: async () => {}, now: NOW })) === 0 && posts.length === 1, "--heartbeat sends exactly one message, exit 0");
+  expect((posts[0]?.markdown?.title || "").includes("周心跳"), "heartbeat title is recognisable");
+  posts.length = 0;
+  expect((await main(["--heartbeat", path.join(hb, "nope")], env, { fetchFn: async (u, i) => { if (String(u).startsWith("https://api.github.com/")) throw new Error("down"); return fetchFn(u, i); }, sleep: async () => {}, now: NOW })) === 0 && posts.length === 1, "heartbeat still sent when both sources fail (says 未能统计)");
 }
 
 console.log("[selftest] main — bad input");

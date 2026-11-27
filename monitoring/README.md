@@ -116,6 +116,16 @@ logged and never fails the daily job. Preview without sending:
 `DRY_RUN=1 node monitoring/report/notify-dingtalk-layer-d.mjs monitoring/reports/<full-….json>`.
 Offline self-test: `node monitoring/report/notify-dingtalk-layer-d.selftest.mjs`.
 
+
+**Weekly heartbeat (owner 2026-11-28).** Because the group only hears about
+problems, every **Monday** the daily job also sends one "💓 监控周心跳" message
+(`notify-dingtalk-layer-d.mjs --heartbeat monitoring/reports`): how many of the
+last 7 days the local Layer D job ran (from the report files) and how many MCP
+Health runs GitHub Actions made (public API, no token). A source that can't be
+read says "未能统计", never 0. No heartbeat on a Monday = this local job did not
+run (Mac off/asleep, `~/.novada/monitor.env` missing). `HEARTBEAT_FORCE=1` sends
+it on any day for testing.
+
 ### Processing → poll disambiguation
 
 Some scraper platforms (Amazon, Walmart, TikTok, X, SHEIN, Perplexity, …) are
