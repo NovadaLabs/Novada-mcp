@@ -177,6 +177,7 @@ console.log("[selftest] could-not-run paths always reach the group (review 2026-
   expect((await main(["--fatal", "run-daily-report: probe wrote no report (probe exit 137)"], env, { fetchFn, sleep: async () => {} })) === 0 && bodies.length === 1, "--fatal <reason> → sent, exit 0");
   const t1 = bodies[0]?.markdown?.text || "";
   expect(t1.includes("未能运行") && t1.includes("probe exit 137"), "--fatal message says could-not-run and carries the reason");
+  expect(!t1.includes("exitCode 1"), "--fatal message does not invent an exitCode of its own");
   bodies.length = 0;
   const trunc = path.join(dir, "truncated.json");
   writeFileSync(trunc, '{"results": [');

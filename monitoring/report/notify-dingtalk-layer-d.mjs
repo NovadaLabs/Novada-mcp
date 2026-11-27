@@ -29,7 +29,8 @@
  *
  * Exit: 0 sent / skipped (healthy run or no webhook) / dry-run · 1 DingTalk or network rejected the send ·
  * 2 bad input (no path, missing or unparseable report — a "could not run"
- * message is still attempted for a missing/unparseable report).
+ * message is still attempted for a missing/unparseable report; if that send
+ * fails the exit is 1). The caller only logs this code.
  */
 import { readFileSync } from "node:fs";
 import { sendDingTalk } from "../dingtalk/send.mjs";
@@ -115,7 +116,7 @@ export function buildLayerDMessage(report, { knownSecrets = [] } = {}) {
     const lines = [
       `### ${title}`,
       "",
-      `**探针未能运行：一个工具都没测到**（exitCode ${report?.exitCode ?? "?"}）。`,
+      `**探针未能运行：一个工具都没测到**${report?.exitCode != null ? `（exitCode ${report.exitCode}）` : ""}。`,
       "",
       report?.summary?.fatalError
         ? `原因：${shortError(report.summary.fatalError, knownSecrets)}`
@@ -230,7 +231,7 @@ export async function main(argv, env, deps = {}) {
 
 /** Synthetic "could not run" report for when there is no usable probe report. */
 function fatalReport(reason) {
-  return { finishedAt: new Date().toISOString(), results: [], exitCode: 1, summary: { fatalError: String(reason) } };
+  return { finishedAt: new Date().toISOString(), results: [], exitCode: null, summary: { fatalError: String(reason) } };
 }
 
 const isMain = (() => {

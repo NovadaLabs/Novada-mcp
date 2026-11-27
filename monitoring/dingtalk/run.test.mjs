@@ -632,13 +632,18 @@ test("runAlertMode: pass after an alert -> state resets but NO recovery message 
   };
   const originalFetch = globalThis.fetch;
   globalThis.fetch = fetchFn;
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...args) => { logs.push(args.join(" ")); };
   try {
     const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: failingSince + 3_600_000 });
     assert.equal(exitCode, 0);
   } finally {
     globalThis.fetch = originalFetch;
+    console.log = origLog;
   }
   assert.equal(sent.length, 0, "recovery must not be sent to the group");
+  assert.ok(logs.some((l) => /recovered \(not sent\): initialize after 1h/.test(l)), `outage length must be logged (got: ${logs.filter((l) => l.includes("recover")).join(" | ")})`);
   assert.equal(saved.checks.initialize.alerted, false, "state still resets so a future failure alerts again");
   assert.equal(saved.checks.initialize.consecutiveFailures, 0);
 });
