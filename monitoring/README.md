@@ -122,7 +122,10 @@ problems, every **Monday** the daily job also sends one "💓 监控周心跳" m
 (`notify-dingtalk-layer-d.mjs --heartbeat monitoring/reports`): on how many of
 the 7 local calendar days (today + 6 before) the local Layer D job ran (from the
 report files; never more than 7/7) and how many **scheduled** MCP Health runs
-GitHub Actions made vs the ~35 expected (public API, no token). A source that can't be
+GitHub Actions made (35 are scheduled; GitHub routinely drops ~1/3, so the
+warning is a whole UTC day with zero runs, not a low count; public API, no
+token). Caveat: any `full-*.json` counts as a run on its day, so a manual probe
+run on a day the schedule missed would hide that gap. A source that can't be
 read says "未能统计", never 0. No heartbeat on a Monday = this local job did not
 run (Mac off/asleep, `~/.novada/monitor.env` missing). A Monday run that exits
 early on a FATAL path sends "探针未能运行" instead of the heartbeat.

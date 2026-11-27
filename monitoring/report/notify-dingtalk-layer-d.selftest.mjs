@@ -233,10 +233,20 @@ console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
   const h3 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => { throw new Error("ENOTFOUND"); } });
   expect(/403/.test(h2.error || "") && /ENOTFOUND/.test(h3.error || ""), "API HTTP error / network error → error, not zeros");
 
-  const ok = buildHeartbeatMessage({ now: NOW, layerD: { runs: 7, days: 7, problems: 0, unreadable: 0 }, health: { runs: 35, jobErrors: 0 } }).text;
-  expect(ok.includes("7/7") && ok.includes("**35** 次（应约 35 次）") && !ok.includes("⚠️"), "healthy week: counts vs expected shown, no warning");
-  const bad = buildHeartbeatMessage({ now: NOW, layerD: { runs: 3, days: 3, problems: 1, unreadable: 0 }, health: { runs: 1, jobErrors: 0 } }).text;
-  expect(bad.includes("3/7") && bad.includes("少于 7 天") && bad.includes("明显偏少"), "missed days and a near-empty schedule (1 run) are flagged");
+  const ok = buildHeartbeatMessage({ now: NOW, layerD: { runs: 7, days: 7, problems: 0, unreadable: 0 }, health: { runs: 21, jobErrors: 0, gapDays: [] } }).text;
+  expect(ok.includes("7/7") && ok.includes("**21** 次") && !ok.includes("⚠️"), "healthy week with GitHub's usual drops (21 of 35): no warning");
+  const bad = buildHeartbeatMessage({ now: NOW, layerD: { runs: 3, days: 3, problems: 1, unreadable: 0 }, health: { runs: 15, jobErrors: 0, gapDays: ["2026-11-27", "2026-11-28"] } }).text;
+  expect(bad.includes("3/7") && bad.includes("少于 7 天") && bad.includes("2026-11-27、2026-11-28 整天没有运行"), "missed Layer D days and whole-day GitHub gaps are flagged");
+
+  // Gap detection from real-shaped API data: 21 runs spread over every day → no gap; a 2-day hole → flagged.
+  const spread = (days, perDay) => days.flatMap((d) => Array.from({ length: perDay }, (_, i) => ({ created_at: `${d}T${String(i * 6).padStart(2, "0")}:37:00Z`, event: "schedule", status: "completed", conclusion: "success" })));
+  const week = ["2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28", "2026-11-29"];
+  const gNone = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: spread(week, 3).concat(spread(["2026-11-30"], 1)) }), { status: 200 }) });
+  expect(gNone.runs === 19 && gNone.gapDays.length === 0, `3 runs/day every day → no gap (runs ${gNone.runs}, gaps ${gNone.gapDays})`);
+  const gHole = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: spread(week.filter((d) => d !== "2026-11-26" && d !== "2026-11-27"), 5) }), { status: 200 }) });
+  expect(gHole.gapDays.join(",") === "2026-11-26,2026-11-27", `whole-day gaps reported in order (${gHole.gapDays})`);
+  const gZero = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response(JSON.stringify({ workflow_runs: [] }), { status: 200 }) });
+  expect(gZero.runs === 0 && gZero.gapDays.length === 6, "schedule fully stopped → all 6 days flagged");
   expect(bad.includes("应已单独报过"), "heartbeat does not claim problem messages were delivered");
 
   // Pin EXPECTED_HEALTH_RUNS_PER_WEEK to the workflow's crons (runs/day = number of hours in each cron).
@@ -249,6 +259,8 @@ console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
   try {
     for (const tz of ["UTC", "Europe/Berlin"]) {
       process.env.TZ = tz;
+      // A TZ switch that silently does nothing must fail loudly, not pass vacuously.
+      expect(new Date(Date.UTC(2026, 0, 1)).getTimezoneOffset() === (tz === "UTC" ? 0 : -60), `[${tz}] runtime TZ switch took effect`);
       const d1 = mkdtempSync(path.join(tmpdir(), "layerd-hb-edge-"));
       const at = (iso) => writeFileSync(path.join(d1, `full-${iso.replace(/[:.]/g, "-")}.json`), green);
       at("2026-11-23T02:05:30.000Z"); // last Monday, 20 s inside 168 h
@@ -260,8 +272,20 @@ console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
       const full = collectLayerDWeek(d1, Date.parse("2026-11-30T02:05:15.000Z"));
       expect(full.days === 7, `[${tz}] a full week is 7/7, never 8/7 (days ${full.days})`);
     }
+    // Local date, not UTC date: a report at 23:30Z on Tue 11-24 is Wednesday 00:30 in Berlin.
+    for (const [tz, want] of [["Europe/Berlin", 7], ["UTC", 6]]) {
+      process.env.TZ = tz;
+      const d3 = mkdtempSync(path.join(tmpdir(), "layerd-hb-local-"));
+      const at3 = (iso) => writeFileSync(path.join(d3, `full-${iso.replace(/[:.]/g, "-")}.json`), green);
+      for (const day of ["26", "27", "28", "29", "30"]) at3(`2026-11-${day}T01:57:00.000Z`);
+      at3("2026-11-24T01:57:00.000Z");
+      at3("2026-11-24T23:30:00.000Z"); // Berlin: Wed 11-25 00:30 · UTC: still Tue 11-24
+      const l = collectLayerDWeek(d3, Date.parse("2026-11-30T02:00:00.000Z"));
+      expect(l.days === want, `[${tz}] days counted by LOCAL date (${l.days}/7, want ${want}/7)`);
+    }
     // Spring DST week (EU 2027-03-28): 02:57 local runs are 167 h apart.
     process.env.TZ = "Europe/Berlin";
+    expect(new Date(Date.UTC(2027, 2, 29)).getTimezoneOffset() === -120, "[DST week] Berlin is on summer time by 03-29");
     const d2 = mkdtempSync(path.join(tmpdir(), "layerd-hb-dst-"));
     const at2 = (iso) => writeFileSync(path.join(d2, `full-${iso.replace(/[:.]/g, "-")}.json`), green);
     at2("2027-03-22T01:57:00.000Z"); // Mon 02:57 CET

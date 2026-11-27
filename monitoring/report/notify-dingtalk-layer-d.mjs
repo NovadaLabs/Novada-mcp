@@ -321,7 +321,17 @@ export async function collectHealthWeek({ repo, now, fetchFn }) {
     // Only scheduled runs prove the schedule is alive (a manual test run must not mask a disabled cron).
     const scheduled = runs.filter((r) => r.event === "schedule");
     const jobErrors = scheduled.filter((r) => r.status === "completed" && r.conclusion !== "success").length;
-    return { runs: scheduled.length, jobErrors };
+    // GitHub's scheduler drops ~1/3 of runs (healthy weeks measured 21–23 of 35),
+    // so a count threshold cries wolf (review round 4 HIGH). Instead: each of the
+    // 6 full UTC days before today should have ≥1 scheduled run (5 are scheduled
+    // per day); a day with 0 is a real gap.
+    const seen = new Set(scheduled.map((r) => String(r.created_at).slice(0, 10)));
+    const gapDays = [];
+    for (let k = 1; k <= 6; k += 1) {
+      const day = new Date(now - k * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      if (!seen.has(day)) gapDays.push(day);
+    }
+    return { runs: scheduled.length, jobErrors, gapDays: gapDays.reverse() };
   } catch (err) {
     return { error: `GitHub API: ${err?.name === "TimeoutError" ? "timeout" : err?.message || err}` };
   }
@@ -336,7 +346,7 @@ export function buildHeartbeatMessage({ now, layerD, health }) {
     : `- Layer D 每日全量探针（本机）：近 7 天有 **${layerD.days}/7** 天跑过（共 ${layerD.runs} 份报告），其中 ${layerD.problems} 份有问题（应已单独报过）${layerD.unreadable ? `，${layerD.unreadable} 份无法读取` : ""}${layerD.days < 7 ? " ⚠️ 少于 7 天：本机定时任务有几天没跑（关机/睡眠？）" : ""}`;
   const hc = health?.error
     ? `- MCP Health 定时检查（GitHub Actions）：❓ 未能统计（${health.error}）`
-    : `- MCP Health 定时检查（GitHub Actions）：近 7 天定时运行 **${health.runs}** 次（应约 ${EXPECTED_HEALTH_RUNS_PER_WEEK} 次）${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.runs < EXPECTED_HEALTH_RUNS_PER_WEEK * 0.8 ? " ⚠️ 明显偏少：定时任务可能被停用或排队丢失" : ""}`;
+    : `- MCP Health 定时检查（GitHub Actions）：近 7 天定时运行 **${health.runs}** 次（排了 ${EXPECTED_HEALTH_RUNS_PER_WEEK} 次，GitHub 常丢约 1/3，属正常）${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.gapDays?.length ? ` ⚠️ ${health.gapDays.join("、")} 整天没有运行：定时任务可能被停用` : ""}`;
   const lines = [
     `### ${title}`,
     "",
