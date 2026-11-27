@@ -144,6 +144,8 @@ export function composeAlertMessage(action, checkRow, runUrl) {
   return { kind: "actionCard", title, text, actionCard: runUrl ? { singleTitle: "查看 Actions 运行记录", singleURL: runUrl } : undefined };
 }
 
+// Not sent by runAlertMode since 2026-11-27 (owner: problems only); kept so
+// the recovery wording can be restored with a one-line change.
 export function composeRecoveryMessage(action, checkRow, runUrl) {
   const label = checkRow?.labelZh || checkRow?.label || action.id;
   const title = `🟢 Novada MCP — ${label} recovered`;
@@ -302,8 +304,10 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
   for (const action of actions) {
     const row = checkRowById(action.id);
     let msg;
+    // Recovery is NOT sent (owner 2026-11-27: "没问题就不用发了，有问题再发") —
+    // the group only hears about problems. The state machine still emits the
+    // action (it resets the entry); it is logged below with the outage length.
     if (action.type === "alert") msg = composeAlertMessage(action, row, runUrl);
-    else if (action.type === "recovery") msg = composeRecoveryMessage(action, row, runUrl);
     else if (action.type === "heartbeat") msg = composeHeartbeatMessage(action, row, runUrl);
     else continue;
 
@@ -334,8 +338,10 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
 }
 
 /**
- * --mode daily: free + billable checks, one markdown report, always sent
- * (findings or not) — no dedupe/state involved.
+ * --mode daily: free + billable checks, one markdown report — sent ONLY when
+ * at least one check failed (owner 2026-11-27: "没问题就不用发了"). A run with
+ * zero results is treated as failed (fail closed). Slow-but-ok is not a
+ * failure (see renderDailyReport's 慢 marker). No dedupe/state involved.
  *
  * @returns {Promise<number>} process exit code
  */
@@ -343,6 +349,13 @@ export async function runDailyMode({ ctx, dryRun, webhookUrl, secret, keyword, i
   const { send = sendDingTalk, rateLimiter = createRateLimiter() } = io;
 
   const results = await runChecks(ctx, ["free", "billable"]);
+  if (results.length > 0 && results.every((r) => r.ok)) {
+    for (const r of results) {
+      console.log(`[dingtalk/run daily] OK  ${r.id} (${r.latencyMs}ms) ${r.note}`);
+    }
+    console.log(`[dingtalk/run daily] all ${results.length} checks ok — nothing sent (send only on problems)`);
+    return 0;
+  }
   const dateStamp = shanghaiDateStamp();
   const { title, text } = renderDailyReport({ results, dateStamp });
 

@@ -550,38 +550,79 @@ test("runAlertMode: a misconfigured notice for the same check is sent exactly ON
   }
 });
 
-test("runDailyMode: sends exactly one markdown report covering all check ids", async () => {
-  const sent = [];
-  const io = {
-    send: async (msg) => {
-      sent.push(msg);
-      return { ok: true };
-    },
-    rateLimiter: { acquire: async () => {} },
-  };
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, opts) => {
+/** Daily-mode fetch stub: every check passes, unless `initializeStatus` is not 200. */
+function dailyFetchStub(initializeStatus = 200) {
+  return async (url, opts) => {
     if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
+    if (!opts.headers?.authorization) {
+      return { status: 401, headers: { get: (k) => (k.toLowerCase() === "www-authenticate" ? 'Bearer resource_metadata="x"' : null) } };
+    }
     const body = JSON.parse(opts.body);
-    if (body.method === "initialize") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" } } }) };
+    if (body.method === "initialize") {
+      if (initializeStatus !== 200) return { status: initializeStatus, headers: { get: () => null }, text: async () => JSON.stringify({ error: "boom" }) };
+      return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" } } }) };
+    }
     if (body.method === "tools/list") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { tools: [{ name: "a" }] } }) };
-    if (body.method === "tools/call") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { content: [{ type: "text", text: "ok" }] } }) };
-    return { status: 401, headers: { get: () => null } };
+    return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { content: [{ type: "text", text: "ok" }] } }) };
   };
+}
+
+async function runDailyWith(fetchFn) {
+  const sent = [];
+  const io = { send: async (msg) => { sent.push(msg); return { ok: true }; }, rateLimiter: { acquire: async () => {} } };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
   try {
     const exitCode = await runDailyMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
+    return { exitCode, sent };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test("runDailyMode: all checks ok -> NOTHING sent (owner 2026-11-27: send only on problems)", async () => {
+  const { exitCode, sent } = await runDailyWith(dailyFetchStub(200));
+  assert.equal(exitCode, 0);
+  assert.equal(sent.length, 0, "an all-green daily run must not message the group");
+});
+
+test("runDailyMode: a failing check -> exactly one markdown report covering all check ids", async () => {
+  const { exitCode, sent } = await runDailyWith(dailyFetchStub(500));
+  assert.equal(exitCode, 0);
+  assert.equal(sent.length, 1, "daily mode sends exactly one message when something failed");
+  assert.equal(sent[0].kind, "markdown");
+  assert.ok(sent[0].text.includes("failing"), "the report says checks are failing");
+  for (const row of CHECK_TABLE) {
+    assert.ok(sent[0].text.includes(row.labelZh), `daily report missing a row for "${row.id}" (labelZh: ${row.labelZh})`);
+  }
+});
+
+test("runAlertMode: pass after an alert -> state resets but NO recovery message is sent (problems only)", async () => {
+  const sent = [];
+  let saved = null;
+  const { fetchFn } = fetchFnWithControllableInitialize(0); // initialize passes now
+  const failingSince = 1_000;
+  const io = {
+    send: async (msg) => { sent.push(msg); return { ok: true }; },
+    load: () => ({ checks: { initialize: { consecutiveFailures: 3, failingSince, alerted: true } } }),
+    save: (s) => { saved = s; },
+    rateLimiter: { acquire: async () => {} },
+    sleep: async () => {},
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  try {
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: failingSince + 3_600_000 });
     assert.equal(exitCode, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
-  assert.equal(sent.length, 1, "daily mode sends exactly one message");
-  assert.equal(sent[0].kind, "markdown");
-  for (const row of CHECK_TABLE) {
-    assert.ok(sent[0].text.includes(row.labelZh), `daily report missing a row for "${row.id}" (labelZh: ${row.labelZh})`);
-  }
+  assert.equal(sent.length, 0, "recovery must not be sent to the group");
+  assert.equal(saved.checks.initialize.alerted, false, "state still resets so a future failure alerts again");
+  assert.equal(saved.checks.initialize.consecutiveFailures, 0);
 });
 
 // ── oauth_register probe → DingTalk alert path, against REAL local HTTP servers ──
