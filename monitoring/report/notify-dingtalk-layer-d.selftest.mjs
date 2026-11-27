@@ -76,6 +76,20 @@ console.log("[selftest] buildLayerDMessage — all green");
   expect(!text.includes("测试 key 降级"), "no degradation line when not degraded");
 }
 
+console.log("[selftest] buildLayerDMessage — probe could not run (2026-11-27 outage)");
+{
+  // Shape written by full-tools-probe's FATAL path when tools/list fails (site unreachable):
+  // startedAt null, results [], liveToolCount 0, exitCode 1.
+  const fatal = { startedAt: null, finishedAt: "2026-11-27T01:57:45.366Z", mcpUrl: "https://mcp.novada.com/mcp", liveToolCount: 0, results: [], summary: { maxSeverity: null, maxOursSeverity: null, testKeyDegradedCount: 0 }, exitCode: 1 };
+  const { title, text } = buildLayerDMessage(fatal);
+  expect(!text.includes("0/0 正常") && !/\*\*\d+\/\d+ 正常\*\*/.test(text), "a run that tested nothing never shows an 'N/M 正常' health line");
+  expect(title.includes("未能运行") && text.includes("未能运行"), "title and body say the probe could not run");
+  expect(text.includes("tools/list") && text.includes("exitCode 1"), "body names the failing step and the exit code");
+  expect(text.includes("MCP Health"), "body points to the MCP Health alerts for the outage itself");
+  const empty2 = { ...fatal, startedAt: "2026-11-27T01:57:00.000Z", liveToolCount: 29, results: [] };
+  expect(buildLayerDMessage(empty2).text.includes("未能运行"), "zero result rows is treated as 'could not run' even if startedAt is set");
+}
+
 console.log("[selftest] buildLayerDMessage — truncation");
 {
   const many = { ...MIXED, results: Array.from({ length: MAX_FAILURE_LINES + 5 }, (_, i) => row(`novada_t${i}`, "FAIL", "③-backend", "P2", "Error [API_DOWN]: x")) };

@@ -78,6 +78,23 @@ export function buildLayerDMessage(report, { knownSecrets = [] } = {}) {
   const byDomain = (d) => failed.filter((r) => r.domain === d).length;
   const otherFail = failed.filter((r) => !DOMAIN_ORDER.includes(r.domain)).length;
 
+  // A run that tested nothing (full-tools-probe's FATAL path: tools/list failed,
+  // e.g. the site is unreachable — startedAt null, results []) must never render
+  // as a health line: "0/0 正常 · 失败 0" read as all-clear during the 2026-11-27 outage.
+  if (results.length === 0) {
+    const title = `📋 Novada MCP 全量工具探针 — ${date} — ❌ 探针未能运行`;
+    const lines = [
+      `### ${title}`,
+      "",
+      `**探针未能运行：一个工具都没测到**（tools/list 失败或服务不可达；exitCode ${report?.exitCode ?? "?"}）。`,
+      "",
+      "这通常意味着 mcp.novada.com 整体不可用——请看同群的 MCP Health 告警，并先确认站点可达。",
+      "",
+      `_Layer D 每日全量探针 · 本地定时任务 · ${report?.finishedAt ?? ""}_`,
+    ];
+    return { title, text: lines.join("\n") };
+  }
+
   const title = `📋 Novada MCP 全量工具探针 — ${date}`;
   const lines = [`### ${title}`, ""];
   lines.push(
