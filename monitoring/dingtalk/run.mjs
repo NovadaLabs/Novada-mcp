@@ -144,6 +144,8 @@ export function composeAlertMessage(action, checkRow, runUrl) {
   return { kind: "actionCard", title, text, actionCard: runUrl ? { singleTitle: "查看 Actions 运行记录", singleURL: runUrl } : undefined };
 }
 
+// Not sent by runAlertMode since 2026-11-27 (owner: problems only); kept so
+// the recovery wording can be restored with a one-line change.
 export function composeRecoveryMessage(action, checkRow, runUrl) {
   const label = checkRow?.labelZh || checkRow?.label || action.id;
   const title = `🟢 Novada MCP — ${label} recovered`;
@@ -199,8 +201,16 @@ export function renderDailyReport({ results, dateStamp, now = new Date() }) {
 
   // Account-level test-key problems (balance/validity) never count toward
   // "整体状态" — see classifyFailure()'s header comment.
+  // Since 2026-11-27 this report is only sent when something failed, so the
+  // headline must never read "all healthy" on a sent message.
   const overall =
-    productFailing.length === 0 ? "✅ all healthy" : `⚠️ ${productFailing.length} check(s) failing (worst: ${worstSeverity(productFailing)})`;
+    results.length === 0
+      ? "❌ 检查未能运行（0 项结果）"
+      : productFailing.length > 0
+        ? `⚠️ ${productFailing.length} check(s) failing (worst: ${worstSeverity(productFailing)})`
+        : accountFailing.length > 0
+          ? `⚠️ 监控账号问题（产品正常）: ${accountFailing.length} 项`
+          : "✅ all healthy";
 
   const tableHeader = "| check | status | latency | note |\n| --- | --- | --- | --- |";
   const tableRows = results.map((r) => {
@@ -302,8 +312,10 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
   for (const action of actions) {
     const row = checkRowById(action.id);
     let msg;
+    // Recovery is NOT sent (owner 2026-11-27: "没问题就不用发了，有问题再发") —
+    // the group only hears about problems. The state machine still emits the
+    // action (it resets the entry); it is logged below with the outage length.
     if (action.type === "alert") msg = composeAlertMessage(action, row, runUrl);
-    else if (action.type === "recovery") msg = composeRecoveryMessage(action, row, runUrl);
     else if (action.type === "heartbeat") msg = composeHeartbeatMessage(action, row, runUrl);
     else continue;
 
@@ -326,6 +338,9 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
   if (actions.length > 0) {
     console.log(`[dingtalk/run alert] ${actions.length} action(s): ${actions.map((a) => `${a.type}:${a.id}`).join(", ")}`);
   }
+  for (const a of actions.filter((x) => x.type === "recovery")) {
+    console.log(`[dingtalk/run alert] recovered (not sent): ${a.id} after ${fmtMs(a.outageMs)}`);
+  }
   if (misconfiguredToNotify.length > 0) {
     console.log(`[dingtalk/run alert] ${misconfiguredToNotify.length} misconfigured notice(s): ${misconfiguredToNotify.map((r) => r.id).join(", ")}`);
   }
@@ -333,9 +348,16 @@ export async function runAlertMode({ ctx, dryRun, webhookUrl, secret, keyword, r
   return sendFailure ? 1 : 0;
 }
 
+/** Daily report is sent only on a problem; zero results counts as one (fail closed). */
+export function dailyShouldSend(results) {
+  return !Array.isArray(results) || results.length === 0 || results.some((r) => !r?.ok);
+}
+
 /**
- * --mode daily: free + billable checks, one markdown report, always sent
- * (findings or not) — no dedupe/state involved.
+ * --mode daily: free + billable checks, one markdown report — sent ONLY when
+ * at least one check failed (owner 2026-11-27: "没问题就不用发了"). A run with
+ * zero results is treated as failed (fail closed). Slow-but-ok is not a
+ * failure (see renderDailyReport's 慢 marker). No dedupe/state involved.
  *
  * @returns {Promise<number>} process exit code
  */
@@ -343,6 +365,13 @@ export async function runDailyMode({ ctx, dryRun, webhookUrl, secret, keyword, i
   const { send = sendDingTalk, rateLimiter = createRateLimiter() } = io;
 
   const results = await runChecks(ctx, ["free", "billable"]);
+  if (!dailyShouldSend(results)) {
+    for (const r of results) {
+      console.log(`[dingtalk/run daily] OK  ${r.id} (${r.latencyMs}ms) ${r.note}`);
+    }
+    console.log(`[dingtalk/run daily] all ${results.length} checks ok — nothing sent (send only on problems)`);
+    return 0;
+  }
   const dateStamp = shanghaiDateStamp();
   const { title, text } = renderDailyReport({ results, dateStamp });
 

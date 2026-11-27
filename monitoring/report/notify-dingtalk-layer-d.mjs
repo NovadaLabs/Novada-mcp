@@ -7,6 +7,9 @@
  * monitoring/smoke/full-tools-probe.mjs). Called by run-daily-report.sh after
  * the daily local run; dependency-free Node >=20.
  *
+ * Sends ONLY when the run found a problem (owner 2026-11-27: "没问题就不用发了");
+ * an all-healthy run is logged locally and sends nothing — see layerDProblem().
+ *
  * Why (2026-11-25): the DingTalk daily report (monitoring/dingtalk, GitHub
  * Actions 01:07Z) checks 6 of the 29 hosted tools and only for "no error",
  * so it showed 1 failure while Layer D found ~10 tools failing every day
@@ -14,6 +17,9 @@
  *
  * Usage:
  *   node monitoring/report/notify-dingtalk-layer-d.mjs <report.json>
+ *   node monitoring/report/notify-dingtalk-layer-d.mjs --fatal "<reason>"
+ *     (the caller could not get a fresh report at all — always sends
+ *      "probe could not run" with the reason; review 2026-11-27 HIGH)
  *
  * Env (same names as monitoring/dingtalk/run.mjs):
  *   DINGTALK_WEBHOOK_URL  required to send; UNSET → skip cleanly (exit 0)
@@ -21,8 +27,10 @@
  *   DINGTALK_KEYWORD      optional — keyword-security robots (auto-ensured)
  *   DRY_RUN=1             print the message instead of sending
  *
- * Exit: 0 sent / skipped / dry-run · 1 DingTalk or network rejected the send ·
- * 2 bad input (no path, missing or unparseable report).
+ * Exit: 0 sent / skipped (healthy run or no webhook) / dry-run · 1 DingTalk or network rejected the send ·
+ * 2 bad input (no path, missing or unparseable report — a "could not run"
+ * message is still attempted for a missing/unparseable report; if that send
+ * fails the exit is 1). The caller only logs this code.
  */
 import { readFileSync } from "node:fs";
 import { sendDingTalk } from "../dingtalk/send.mjs";
@@ -61,6 +69,28 @@ export function withTimeout(fetchImpl, ms = SEND_TIMEOUT_MS) {
 }
 
 /**
+ * Why this run is worth a DingTalk message, or null when everything was healthy.
+ * Fail-closed: anything other than a non-empty, all-healthy run counts as a
+ * problem — zero rows (probe could not run), FAIL, MISSING, a degraded test key
+ * (results untrustworthy), a non-zero probe exitCode, or a status we don't know.
+ * @returns {string | null}
+ */
+const OK_STATUSES = new Set(["PASS", "SLOW", "ASYNC"]);
+const KNOWN_STATUSES = new Set([...OK_STATUSES, "FAIL", "MISSING"]);
+
+export function layerDProblem(report) {
+  const results = Array.isArray(report?.results) ? report.results : [];
+  if (results.length === 0) return "no-results";
+  const OK = OK_STATUSES;
+  if (results.some((r) => r?.status === "FAIL")) return "fail";
+  if (results.some((r) => r?.status === "MISSING")) return "missing";
+  if (results.some((r) => !OK.has(r?.status))) return "unknown-status";
+  if (Number(report?.summary?.testKeyDegradedCount) > 0) return "test-key-degraded";
+  if (report?.exitCode != null && Number(report.exitCode) !== 0) return "nonzero-exit";
+  return null;
+}
+
+/**
  * @param {{finishedAt?: string, startedAt?: string, results?: object[], summary?: object}} report
  * @param {{knownSecrets?: string[]}} [opts]
  * @returns {{title: string, text: string}}
@@ -77,6 +107,27 @@ export function buildLayerDMessage(report, { knownSecrets = [] } = {}) {
   const missing = results.filter((r) => r.status === "MISSING").map((r) => r.name);
   const byDomain = (d) => failed.filter((r) => r.domain === d).length;
   const otherFail = failed.filter((r) => !DOMAIN_ORDER.includes(r.domain)).length;
+
+  // A run that tested nothing (full-tools-probe's FATAL path: tools/list failed,
+  // e.g. the site is unreachable — startedAt null, results []) must never render
+  // as a health line: "0/0 正常 · 失败 0" read as all-clear during the 2026-11-27 outage.
+  if (results.length === 0) {
+    const title = `📋 Novada MCP 全量工具探针 — ${date} — ❌ 探针未能运行`;
+    const lines = [
+      `### ${title}`,
+      "",
+      `**探针未能运行：一个工具都没测到**${report?.exitCode != null ? `（exitCode ${report.exitCode}）` : ""}。`,
+      "",
+      report?.summary?.fatalError
+        ? `原因：${shortError(report.summary.fatalError, knownSecrets)}`
+        : "原因：未知（没有错误信息）",
+      "",
+      "若原因是连接失败/超时或 tools/list 失败，多半是 mcp.novada.com 不可用——请看同群的 MCP Health 告警；否则是探针或本地定时任务本身出错，请查本机日志。",
+      "",
+      `_Layer D 每日全量探针 · 本地定时任务 · ${report?.finishedAt ?? ""}_`,
+    ];
+    return { title, text: lines.join("\n") };
+  }
 
   const title = `📋 Novada MCP 全量工具探针 — ${date}`;
   const lines = [`### ${title}`, ""];
@@ -108,6 +159,13 @@ export function buildLayerDMessage(report, { knownSecrets = [] } = {}) {
   if (missing.length > 0) {
     lines.push("", `**缺失工具**（探针清单有、线上 tools/list 没有）: ${missing.join(", ")}`);
   }
+  const unknown = results.filter((r) => !KNOWN_STATUSES.has(r?.status));
+  if (unknown.length > 0) {
+    lines.push("", `**未知状态**（探针返回了本脚本不认识的状态）: ${unknown.map((r) => `${r?.name ?? "?"}=${r?.status ?? "无"}`).join(", ")}`);
+  }
+  if (report?.exitCode != null && Number(report.exitCode) !== 0) {
+    lines.push("", `探针退出码: ${report.exitCode}（非 0）`);
+  }
   lines.push("", `_Layer D 每日全量探针 · 本地定时任务 · ${report?.finishedAt ?? ""}_`);
   return { title, text: lines.join("\n") };
 }
@@ -125,11 +183,24 @@ export async function main(argv, env, deps = {}) {
     return 2;
   }
   let report;
-  try {
-    report = JSON.parse(readFileSync(reportPath, "utf8"));
-  } catch (err) {
-    console.error(`[notify-layer-d] cannot read report ${reportPath}: ${err?.message || err}`);
-    return 2;
+  let inputError = false;
+  if (reportPath === "--fatal") {
+    report = fatalReport(argv[1] || "run-daily-report: no fresh report (reason not given)");
+  } else {
+    try {
+      report = JSON.parse(readFileSync(reportPath, "utf8"));
+    } catch (err) {
+      console.error(`[notify-layer-d] cannot read report ${reportPath}: ${err?.message || err}`);
+      // Unreadable report = nothing measured; still tell the group (fail closed).
+      report = fatalReport(`report unreadable: ${err?.message || err}`);
+      inputError = true;
+    }
+  }
+
+  const problem = layerDProblem(report);
+  if (problem === null) {
+    console.log(`[notify-layer-d] skip: all ${report.results.length} tools healthy — nothing sent (send only on problems)`);
+    return 0;
   }
 
   const knownSecrets = SECRET_ENV_VARS.map((k) => env[k]).filter(Boolean);
@@ -137,7 +208,7 @@ export async function main(argv, env, deps = {}) {
   const dryRun = env.DRY_RUN === "1";
   if (!env.DINGTALK_WEBHOOK_URL && !dryRun) {
     console.log("[notify-layer-d] skip: DINGTALK_WEBHOOK_URL not set (add it to ~/.novada/monitor.env to enable)");
-    return 0;
+    return inputError ? 2 : 0;
   }
 
   const res = await sendDingTalk({
@@ -155,7 +226,12 @@ export async function main(argv, env, deps = {}) {
     return 1;
   }
   console.log(`[notify-layer-d] ${res.dryRun ? "dry-run printed" : "sent"}: ${title}`);
-  return 0;
+  return inputError ? 2 : 0;
+}
+
+/** Synthetic "could not run" report for when there is no usable probe report. */
+function fatalReport(reason) {
+  return { finishedAt: new Date().toISOString(), results: [], exitCode: null, summary: { fatalError: String(reason) } };
 }
 
 const isMain = (() => {

@@ -69,7 +69,8 @@ pure + unit-tested):
   (still-failing reminder) once per run (so an unresolved outage never
   looks silently ignored/read) — at this cadence, at most 4/day; this
   replaced the old fixed 2-hour timer, which doesn't fit a 6h-apart cadence.
-- a pass after an alert → send ONE "🟢 recovery" message with the outage duration, then reset.
+- a pass after an alert → reset the state and log the outage duration — **no
+  message** (owner 2026-11-27: the group only hears about problems).
 
 Dedupe state is committed to a dedicated orphan branch,
 `dingtalk-health-state` (one `state.json`, updated via `git` plumbing only —
@@ -80,10 +81,12 @@ see `state.mjs`'s header comment for why a git branch was chosen over
 
 Adds, on the shared `NOVADA_TEST_KEY`: `novada_search`, `novada_extract`
 (`https://example.com`), `novada_scrape_google`/`novada_scrape_bing`
-(`web_search`), `novada_account` (`section=summary`). Always sends ONE
+(`web_search`), `novada_account` (`section=summary`). Sends ONE
 markdown digest (date in Asia/Shanghai, overall status, version, tool
 count, a full per-check table, a failure-detail section, and — when
-present — a separate account-issue section) — findings or not.
+present — a separate account-issue section) — **only when at least one
+check failed** (owner 2026-11-27: "没问题就不用发了"); an all-ok run logs
+and sends nothing. Zero results counts as failed.
 
 Failure annotations come from an explicit `errorCode`/`errorClass` ->
 annotation table in `run.mjs` (`classifyFailure()`) — **never** a tool-name

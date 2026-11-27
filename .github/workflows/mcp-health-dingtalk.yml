@@ -19,8 +19,8 @@ name: MCP Health (DingTalk)
 #     "2 CONSECUTIVE 15-min-apart runs" dedupe did, just without needing a
 #     2nd run 6h later to find out (at this cadence, that would have
 #     delayed a real outage alert by 6-12h). An "alert" fires on the first
-#     CONFIRMED-failing run; a "recovery" message fires on the next pass
-#     after an alert, with outage duration; a "heartbeat" (still-failing
+#     CONFIRMED-failing run; a pass after an alert only resets state (no
+#     message since 2026-11-27 — problems only); a "heartbeat" (still-failing
 #     reminder) fires once per run while the outage continues — at this
 #     cadence, at most 4/day — so it never looks silently ignored. Dedupe
 #     state is committed to the `dingtalk-health-state` orphan branch — see
@@ -29,7 +29,7 @@ name: MCP Health (DingTalk)
 #     needs `contents: write` scoped to ONLY this job.
 #   - daily-report: FREE + BILLABLE checks (adds novada_search/_extract/
 #     _scrape_google/_scrape_bing/_account on the shared NOVADA_TEST_KEY),
-#     once daily — one markdown digest, sent regardless of findings.
+#     once daily — one markdown digest, sent only when a check failed.
 #
 # THIS IS NOT A PR GATE — scheduled + manual only, same convention as
 # nightly-canary.yml/synthetic-monitor.yml. Never add a push/pull_request

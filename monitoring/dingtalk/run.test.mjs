@@ -18,6 +18,7 @@ import {
   shanghaiDateStamp,
   runAlertMode,
   runDailyMode,
+  dailyShouldSend,
   readExpectedToolCount,
   classifyFailure,
   composeAlertMessage,
@@ -67,6 +68,19 @@ test("renderDailyReport: renders a table row for EVERY check result, in order", 
   assert.ok(text.includes("version 0.9.42") === false); // version line uses a labeled field, not the raw note
   assert.match(text, /\*\*version\*\*: 0\.9\.42/);
   assert.match(text, /\*\*tool count\*\*: 28/);
+});
+
+test("dailyShouldSend: zero results or any failure -> send; all ok -> silent", () => {
+  assert.equal(dailyShouldSend([]), true, "zero results is a problem (fail closed)");
+  assert.equal(dailyShouldSend(undefined), true);
+  assert.equal(dailyShouldSend([row("initialize", true), row("tools_list", true)]), false);
+  assert.equal(dailyShouldSend([row("initialize", true), row("tools_list", false)]), true);
+});
+
+test("renderDailyReport: zero results never reads as healthy", () => {
+  const { text } = renderDailyReport({ results: [], dateStamp: "2026-11-28" });
+  assert.doesNotMatch(text, /all healthy/);
+  assert.match(text, /未能运行/);
 });
 
 test("renderDailyReport: overall status is all-healthy when every row passes", () => {
@@ -180,7 +194,11 @@ test("renderDailyReport: an INSUFFICIENT_BALANCE failure does NOT count toward �
     row("novada_search", false, { severity: "P1", note: "novada_search: [INSUFFICIENT_BALANCE] balance too low", errorCode: "INSUFFICIENT_BALANCE", errorClass: "tool" }),
   ];
   const { text } = renderDailyReport({ results, dateStamp: "2026-10-23" });
-  assert.match(text, /all healthy/, "整体状态 must stay healthy — a test-account funding problem is not a product outage");
+  // 整体状态 says the PRODUCT is fine (not a product outage) — but since 2026-11-27
+  // this report is only sent on a problem, so it must not read "all healthy".
+  assert.doesNotMatch(text, /check\(s\) failing/, "a test-account funding problem is not a product outage");
+  assert.doesNotMatch(text, /all healthy/);
+  assert.match(text, /产品正常/);
   assert.match(text, /监控账号问题/);
   assert.match(text, /测试账号余额不足/);
 });
@@ -550,38 +568,84 @@ test("runAlertMode: a misconfigured notice for the same check is sent exactly ON
   }
 });
 
-test("runDailyMode: sends exactly one markdown report covering all check ids", async () => {
-  const sent = [];
-  const io = {
-    send: async (msg) => {
-      sent.push(msg);
-      return { ok: true };
-    },
-    rateLimiter: { acquire: async () => {} },
-  };
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, opts) => {
+/** Daily-mode fetch stub: every check passes, unless `initializeStatus` is not 200. */
+function dailyFetchStub(initializeStatus = 200) {
+  return async (url, opts) => {
     if (String(url).endsWith("/register")) return { status: 201, headers: { get: () => null }, text: async () => JSON.stringify({ client_id: "probe" }) }; // oauth_register probe
     if (!opts || opts.method === "GET") {
       return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ resource: "x", authorization_servers: ["x"], issuer: "x", authorization_endpoint: "x", token_endpoint: "x" }) };
     }
+    if (!opts.headers?.authorization) {
+      return { status: 401, headers: { get: (k) => (k.toLowerCase() === "www-authenticate" ? 'Bearer resource_metadata="x"' : null) } };
+    }
     const body = JSON.parse(opts.body);
-    if (body.method === "initialize") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" } } }) };
+    if (body.method === "initialize") {
+      if (initializeStatus !== 200) return { status: initializeStatus, headers: { get: () => null }, text: async () => JSON.stringify({ error: "boom" }) };
+      return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { serverInfo: { version: "0.9.42" } } }) };
+    }
     if (body.method === "tools/list") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { tools: [{ name: "a" }] } }) };
-    if (body.method === "tools/call") return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { content: [{ type: "text", text: "ok" }] } }) };
-    return { status: 401, headers: { get: () => null } };
+    return { status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ result: { content: [{ type: "text", text: "ok" }] } }) };
   };
+}
+
+async function runDailyWith(fetchFn) {
+  const sent = [];
+  const io = { send: async (msg) => { sent.push(msg); return { ok: true }; }, rateLimiter: { acquire: async () => {} } };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
   try {
     const exitCode = await runDailyMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "k" }, dryRun: false, webhookUrl: "https://example.invalid/x", io });
-    assert.equal(exitCode, 0);
+    return { exitCode, sent };
   } finally {
     globalThis.fetch = originalFetch;
   }
-  assert.equal(sent.length, 1, "daily mode sends exactly one message");
+}
+
+test("runDailyMode: all checks ok -> NOTHING sent (owner 2026-11-27: send only on problems)", async () => {
+  const { exitCode, sent } = await runDailyWith(dailyFetchStub(200));
+  assert.equal(exitCode, 0);
+  assert.equal(sent.length, 0, "an all-green daily run must not message the group");
+});
+
+test("runDailyMode: a failing check -> exactly one markdown report covering all check ids", async () => {
+  const { exitCode, sent } = await runDailyWith(dailyFetchStub(500));
+  assert.equal(exitCode, 0);
+  assert.equal(sent.length, 1, "daily mode sends exactly one message when something failed");
   assert.equal(sent[0].kind, "markdown");
+  assert.ok(sent[0].text.includes("failing"), "the report says checks are failing");
   for (const row of CHECK_TABLE) {
     assert.ok(sent[0].text.includes(row.labelZh), `daily report missing a row for "${row.id}" (labelZh: ${row.labelZh})`);
   }
+});
+
+test("runAlertMode: pass after an alert -> state resets but NO recovery message is sent (problems only)", async () => {
+  const sent = [];
+  let saved = null;
+  const { fetchFn } = fetchFnWithControllableInitialize(0); // initialize passes now
+  const failingSince = 1_000;
+  const io = {
+    send: async (msg) => { sent.push(msg); return { ok: true }; },
+    load: () => ({ checks: { initialize: { consecutiveFailures: 3, failingSince, alerted: true } } }),
+    save: (s) => { saved = s; },
+    rateLimiter: { acquire: async () => {} },
+    sleep: async () => {},
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...args) => { logs.push(args.join(" ")); };
+  try {
+    const exitCode = await runAlertMode({ ctx: { mcpUrl: "https://x/mcp", tlsFn: STUB_TLS_OK, apiKey: "test-key" }, dryRun: false, webhookUrl: "https://example.invalid/x", io, now: failingSince + 3_600_000 });
+    assert.equal(exitCode, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = origLog;
+  }
+  assert.equal(sent.length, 0, "recovery must not be sent to the group");
+  assert.ok(logs.some((l) => /recovered \(not sent\): initialize after 1h/.test(l)), `outage length must be logged (got: ${logs.filter((l) => l.includes("recover")).join(" | ")})`);
+  assert.equal(saved.checks.initialize.alerted, false, "state still resets so a future failure alerts again");
+  assert.equal(saved.checks.initialize.consecutiveFailures, 0);
 });
 
 // ── oauth_register probe → DingTalk alert path, against REAL local HTTP servers ──
