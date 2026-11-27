@@ -119,12 +119,14 @@ Offline self-test: `node monitoring/report/notify-dingtalk-layer-d.selftest.mjs`
 
 **Weekly heartbeat (owner 2026-11-28).** Because the group only hears about
 problems, every **Monday** the daily job also sends one "💓 监控周心跳" message
-(`notify-dingtalk-layer-d.mjs --heartbeat monitoring/reports`): how many of the
-last 7 days the local Layer D job ran (from the report files) and how many MCP
-Health runs GitHub Actions made (public API, no token). A source that can't be
+(`notify-dingtalk-layer-d.mjs --heartbeat monitoring/reports`): on how many of
+the 7 local calendar days (today + 6 before) the local Layer D job ran (from the
+report files; never more than 7/7) and how many **scheduled** MCP Health runs
+GitHub Actions made vs the ~35 expected (public API, no token). A source that can't be
 read says "未能统计", never 0. No heartbeat on a Monday = this local job did not
-run (Mac off/asleep, `~/.novada/monitor.env` missing). `HEARTBEAT_FORCE=1` sends
-it on any day for testing.
+run (Mac off/asleep, `~/.novada/monitor.env` missing). A Monday run that exits
+early on a FATAL path sends "探针未能运行" instead of the heartbeat.
+`HEARTBEAT_FORCE=1` sends it on any day for testing.
 
 ### Processing → poll disambiguation
 

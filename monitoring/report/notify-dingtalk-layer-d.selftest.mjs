@@ -4,10 +4,10 @@
  * (no network, no key, no webhook — fetch is stubbed).
  *   node monitoring/report/notify-dingtalk-layer-d.selftest.mjs
  */
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildHeartbeatMessage, buildLayerDMessage, collectHealthWeek, collectLayerDWeek, layerDProblem, main, MAX_FAILURE_LINES, reportTimeFromName, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
+import { buildHeartbeatMessage, buildLayerDMessage, collectHealthWeek, collectLayerDWeek, EXPECTED_HEALTH_RUNS_PER_WEEK, layerDProblem, main, MAX_FAILURE_LINES, reportTimeFromName, SEND_TIMEOUT_MS, withTimeout } from "./notify-dingtalk-layer-d.mjs";
 
 let failures = 0;
 function expect(cond, msg) {
@@ -212,6 +212,7 @@ console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
   writeFileSync(path.join(hb, "full-2026-11-29T09-00-00-000Z.json"), green); // manual extra run, same day
   writeFileSync(path.join(hb, "full-2026-11-27T01-57-00-000Z.json"), "{trunc");
   writeFileSync(path.join(hb, "full-2026-11-23T01-57-00-000Z.json"), red); // previous Monday: > 7 days, excluded
+  writeFileSync(path.join(hb, "full-2026-11-30T05-00-00-000Z.json"), red); // later today than `now`: excluded
   writeFileSync(path.join(hb, "notes.txt"), "x");
   const ld = collectLayerDWeek(hb, NOW);
   expect(ld.runs === 4 && ld.days === 3, `window = last 7 days, distinct days counted (runs ${ld.runs}, days ${ld.days})`);
@@ -219,22 +220,60 @@ console.log("[selftest] weekly heartbeat (owner 2026-11-28)");
   expect(typeof collectLayerDWeek(path.join(hb, "nope"), NOW).error === "string", "missing reports dir → error, not zeros");
 
   const runsBody = { workflow_runs: [
-    { created_at: "2026-11-29T06:37:00Z", status: "completed", conclusion: "success" },
-    { created_at: "2026-11-28T06:37:00Z", status: "completed", conclusion: "failure" },
-    { created_at: "2026-11-22T06:37:00Z", status: "completed", conclusion: "success" }, // outside window
+    { created_at: "2026-11-29T06:37:00Z", event: "schedule", status: "completed", conclusion: "success" },
+    { created_at: "2026-11-28T06:37:00Z", event: "schedule", status: "completed", conclusion: "failure" },
+    { created_at: "2026-11-28T22:13:00Z", event: "workflow_dispatch", status: "completed", conclusion: "success" }, // manual: ignored
+    { created_at: "2026-11-22T06:37:00Z", event: "schedule", status: "completed", conclusion: "success" }, // outside window
   ] };
   let apiUrl = "";
   const h1 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async (u) => { apiUrl = u; return new Response(JSON.stringify(runsBody), { status: 200 }); } });
-  expect(h1.runs === 2 && h1.jobErrors === 1, `GitHub runs counted within the window (runs ${h1.runs}, jobErrors ${h1.jobErrors})`);
+  expect(h1.runs === 2 && h1.jobErrors === 1, `only SCHEDULED GitHub runs in the window are counted (runs ${h1.runs}, jobErrors ${h1.jobErrors})`);
   expect(apiUrl.includes("/repos/o/r/actions/workflows/mcp-health-dingtalk.yml/runs") && apiUrl.includes("created=%3E%3D2026-11-23"), "queries the MCP Health workflow since 7 days ago");
   const h2 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => new Response("{}", { status: 403 }) });
   const h3 = await collectHealthWeek({ repo: "o/r", now: NOW, fetchFn: async () => { throw new Error("ENOTFOUND"); } });
   expect(/403/.test(h2.error || "") && /ENOTFOUND/.test(h3.error || ""), "API HTTP error / network error → error, not zeros");
 
-  const ok = buildHeartbeatMessage({ now: NOW, layerD: { runs: 7, days: 7, problems: 0, unreadable: 0 }, health: { runs: 28, jobErrors: 0 } }).text;
-  expect(ok.includes("7/7") && ok.includes("28") && !ok.includes("⚠️"), "healthy week: counts shown, no warning");
-  const bad = buildHeartbeatMessage({ now: NOW, layerD: { runs: 3, days: 3, problems: 1, unreadable: 0 }, health: { runs: 0, jobErrors: 0 } }).text;
-  expect(bad.includes("3/7") && bad.includes("少于 7 天") && bad.includes("可能被停用"), "missed days and 0 GitHub runs are flagged");
+  const ok = buildHeartbeatMessage({ now: NOW, layerD: { runs: 7, days: 7, problems: 0, unreadable: 0 }, health: { runs: 35, jobErrors: 0 } }).text;
+  expect(ok.includes("7/7") && ok.includes("**35** 次（应约 35 次）") && !ok.includes("⚠️"), "healthy week: counts vs expected shown, no warning");
+  const bad = buildHeartbeatMessage({ now: NOW, layerD: { runs: 3, days: 3, problems: 1, unreadable: 0 }, health: { runs: 1, jobErrors: 0 } }).text;
+  expect(bad.includes("3/7") && bad.includes("少于 7 天") && bad.includes("明显偏少"), "missed days and a near-empty schedule (1 run) are flagged");
+  expect(bad.includes("应已单独报过"), "heartbeat does not claim problem messages were delivered");
+
+  // Pin EXPECTED_HEALTH_RUNS_PER_WEEK to the workflow's crons (runs/day = number of hours in each cron).
+  const wf = readFileSync(new URL("../../.github/workflows/mcp-health-dingtalk.yml", import.meta.url), "utf8");
+  const perDay = [...wf.matchAll(/cron:\s*"(\S+)\s+(\S+)\s+\*\s+\*\s+\*"/g)].reduce((n, m) => n + m[2].split(",").length, 0);
+  expect(perDay * 7 === EXPECTED_HEALTH_RUNS_PER_WEEK, `expected weekly runs match the workflow crons (${perDay}/day × 7 = ${perDay * 7})`);
+
+  // Review round 3 HIGH: a rolling 168 h window could include LAST Monday's report and show 7/7 with a day missing.
+  const prevTZ = process.env.TZ;
+  try {
+    for (const tz of ["UTC", "Europe/Berlin"]) {
+      process.env.TZ = tz;
+      const d1 = mkdtempSync(path.join(tmpdir(), "layerd-hb-edge-"));
+      const at = (iso) => writeFileSync(path.join(d1, `full-${iso.replace(/[:.]/g, "-")}.json`), green);
+      at("2026-11-23T02:05:30.000Z"); // last Monday, 20 s inside 168 h
+      for (const day of ["24", "26", "27", "28", "29"]) at(`2026-11-${day}T02:05:00.000Z`); // Wednesday 25 missing
+      at("2026-11-30T02:05:10.000Z");
+      const e = collectLayerDWeek(d1, Date.parse("2026-11-30T02:05:15.000Z"));
+      expect(e.days === 6, `[${tz}] last Monday's report not counted, missed Wednesday shows (days ${e.days}/7)`);
+      at("2026-11-25T02:05:00.000Z");
+      const full = collectLayerDWeek(d1, Date.parse("2026-11-30T02:05:15.000Z"));
+      expect(full.days === 7, `[${tz}] a full week is 7/7, never 8/7 (days ${full.days})`);
+    }
+    // Spring DST week (EU 2027-03-28): 02:57 local runs are 167 h apart.
+    process.env.TZ = "Europe/Berlin";
+    const d2 = mkdtempSync(path.join(tmpdir(), "layerd-hb-dst-"));
+    const at2 = (iso) => writeFileSync(path.join(d2, `full-${iso.replace(/[:.]/g, "-")}.json`), green);
+    at2("2027-03-22T01:57:00.000Z"); // Mon 02:57 CET
+    for (const day of ["23", "25", "26", "27"]) at2(`2027-03-${day}T01:57:00.000Z`); // Wed 24 missing
+    at2("2027-03-28T00:57:00.000Z"); // Sun 01:57 CET (the switch is at 01:00Z)
+    at2("2027-03-29T00:57:00.000Z"); // Mon 02:57 CEST
+    const dst = collectLayerDWeek(d2, Date.parse("2027-03-29T00:58:00.000Z"));
+    expect(dst.days === 6, `[DST week] previous Monday excluded, missed Wednesday shows (days ${dst.days}/7)`);
+  } finally {
+    if (prevTZ === undefined) delete process.env.TZ;
+    else process.env.TZ = prevTZ;
+  }
   const unk = buildHeartbeatMessage({ now: NOW, layerD: { error: "reports dir unreadable: ENOENT" }, health: { error: "GitHub API HTTP 403" } }).text;
   expect(unk.match(/未能统计/g)?.length === 2 && !/\*\*0/.test(unk), "an unreadable source says 未能统计, never renders as 0");
 

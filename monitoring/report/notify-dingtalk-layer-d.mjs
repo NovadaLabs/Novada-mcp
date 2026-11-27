@@ -18,11 +18,11 @@
  * Usage:
  *   node monitoring/report/notify-dingtalk-layer-d.mjs <report.json>
  *   node monitoring/report/notify-dingtalk-layer-d.mjs --fatal "<reason>"
+ *     (the caller could not get a fresh report at all — always sends
+ *      "probe could not run" with the reason; review 2026-11-27 HIGH)
  *   node monitoring/report/notify-dingtalk-layer-d.mjs --heartbeat <reportsDir>
  *     (weekly "monitoring is alive" message — owner 2026-11-28: one per week,
  *      since problems-only means silence is otherwise ambiguous; always sent)
- *     (the caller could not get a fresh report at all — always sends
- *      "probe could not run" with the reason; review 2026-11-27 HIGH)
  *
  * Env (same names as monitoring/dingtalk/run.mjs):
  *   DINGTALK_WEBHOOK_URL  required to send; UNSET → skip cleanly (exit 0)
@@ -243,6 +243,29 @@ function fatalReport(reason) {
 // ── Weekly heartbeat ──────────────────────────────────────────────────────────
 export const HEARTBEAT_WINDOW_MS = 7 * 24 * 3600 * 1000;
 const HEALTH_WORKFLOW = "mcp-health-dingtalk.yml";
+// Scheduled MCP Health runs per week: crons "37 0,6,12,18 * * *" (4/day) +
+// "7 1 * * *" (1/day) in .github/workflows/mcp-health-dingtalk.yml — pinned by
+// the selftest against the workflow file.
+export const EXPECTED_HEALTH_RUNS_PER_WEEK = 35;
+
+/** Local calendar date (the job runs at a local time) as YYYY-MM-DD. */
+export function localDate(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Today and the 6 local dates before it (DST-safe: steps by calendar day at local noon). */
+export function expectedLocalDates(now) {
+  const base = new Date(now);
+  base.setHours(12, 0, 0, 0);
+  const out = [];
+  for (let k = 0; k < 7; k += 1) {
+    const d = new Date(base);
+    d.setDate(base.getDate() - k);
+    out.push(localDate(d.getTime()));
+  }
+  return out;
+}
 
 /** full-2026-11-27T01-57-45-366Z.json → ms epoch, or null. */
 export function reportTimeFromName(name) {
@@ -252,7 +275,12 @@ export function reportTimeFromName(name) {
   return Number.isNaN(t) ? null : t;
 }
 
-/** Layer D runs in the last 7 days, from the report files on disk. */
+/**
+ * Layer D runs on the 7 expected local dates (today + 6 before), from the
+ * report files on disk. Counting calendar dates — not a rolling 168 h window,
+ * which could include last Monday's report and show 7/7 with a day missing
+ * (review round 3 HIGH) — means `days` can never exceed 7.
+ */
 export function collectLayerDWeek(reportsDir, now) {
   let names;
   try {
@@ -260,14 +288,17 @@ export function collectLayerDWeek(reportsDir, now) {
   } catch (err) {
     return { error: `reports dir unreadable: ${err?.code || err?.message || err}` };
   }
-  // `days` = distinct days with a run (manual extra runs don't inflate it).
+  // `days` = expected dates with ≥1 run (manual extra runs don't inflate it).
+  const expected = new Set(expectedLocalDates(now));
   let runs = 0, problems = 0, unreadable = 0;
   const days = new Set();
   for (const name of names) {
     const t = reportTimeFromName(name);
-    if (t === null || now - t > HEARTBEAT_WINDOW_MS || t > now) continue;
+    if (t === null || t > now) continue;
+    const day = localDate(t);
+    if (!expected.has(day)) continue;
     runs += 1;
-    days.add(new Date(t).toISOString().slice(0, 10));
+    days.add(day);
     try {
       if (layerDProblem(JSON.parse(readFileSync(path.join(reportsDir, name), "utf8"))) !== null) problems += 1;
     } catch {
@@ -287,8 +318,10 @@ export async function collectHealthWeek({ repo, now, fetchFn }) {
     const body = await res.json();
     const all = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
     const runs = all.filter((r) => Date.parse(r.created_at) >= now - HEARTBEAT_WINDOW_MS);
-    const jobErrors = runs.filter((r) => r.status === "completed" && r.conclusion !== "success").length;
-    return { runs: runs.length, jobErrors };
+    // Only scheduled runs prove the schedule is alive (a manual test run must not mask a disabled cron).
+    const scheduled = runs.filter((r) => r.event === "schedule");
+    const jobErrors = scheduled.filter((r) => r.status === "completed" && r.conclusion !== "success").length;
+    return { runs: scheduled.length, jobErrors };
   } catch (err) {
     return { error: `GitHub API: ${err?.name === "TimeoutError" ? "timeout" : err?.message || err}` };
   }
@@ -296,14 +329,14 @@ export async function collectHealthWeek({ repo, now, fetchFn }) {
 
 /** Pure: the heartbeat text. A source that could not be read is said so, never shown as 0. */
 export function buildHeartbeatMessage({ now, layerD, health }) {
-  const date = new Date(now).toISOString().slice(0, 10);
+  const date = localDate(now);
   const title = `💓 Novada MCP 监控周心跳 — ${date}`;
   const ld = layerD?.error
     ? `- Layer D 每日全量探针（本机）：❓ 未能统计（${layerD.error}）`
-    : `- Layer D 每日全量探针（本机）：近 7 天有 **${layerD.days}/7** 天跑过（共 ${layerD.runs} 份报告），其中 ${layerD.problems} 份有问题（已单独报过）${layerD.unreadable ? `，${layerD.unreadable} 份无法读取` : ""}${layerD.days < 7 ? " ⚠️ 少于 7 天：本机定时任务有几天没跑（关机/睡眠？）" : ""}`;
+    : `- Layer D 每日全量探针（本机）：近 7 天有 **${layerD.days}/7** 天跑过（共 ${layerD.runs} 份报告），其中 ${layerD.problems} 份有问题（应已单独报过）${layerD.unreadable ? `，${layerD.unreadable} 份无法读取` : ""}${layerD.days < 7 ? " ⚠️ 少于 7 天：本机定时任务有几天没跑（关机/睡眠？）" : ""}`;
   const hc = health?.error
     ? `- MCP Health 定时检查（GitHub Actions）：❓ 未能统计（${health.error}）`
-    : `- MCP Health 定时检查（GitHub Actions）：近 7 天运行 **${health.runs}** 次${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.runs === 0 ? " ⚠️ 0 次：定时任务可能被停用" : ""}`;
+    : `- MCP Health 定时检查（GitHub Actions）：近 7 天定时运行 **${health.runs}** 次（应约 ${EXPECTED_HEALTH_RUNS_PER_WEEK} 次）${health.jobErrors ? `，其中 ${health.jobErrors} 次任务本身出错 ⚠️` : ""}${health.runs < EXPECTED_HEALTH_RUNS_PER_WEEK * 0.8 ? " ⚠️ 明显偏少：定时任务可能被停用或排队丢失" : ""}`;
   const lines = [
     `### ${title}`,
     "",
