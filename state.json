@@ -1,39 +1,39 @@
 {
   "checks": {
     "initialize": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     },
     "tools_list": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     },
     "oauth_discovery": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     },
     "oauth_register": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     },
     "tls_expiry": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     },
     "unauthenticated_401": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     },
     "novada_setup": {
-      "consecutiveFailures": 3,
-      "failingSince": 1795730010741,
-      "alerted": true
+      "consecutiveFailures": 0,
+      "failingSince": null,
+      "alerted": false
     }
   },
   "misconfigured": {}
